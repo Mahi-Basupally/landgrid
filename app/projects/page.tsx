@@ -10,7 +10,8 @@ export default function Projects(){
  async function load(){setLoading(true);try{const r=await fetch('/api/projects',{cache:'no-store'});const d=await r.json();if(!r.ok)throw new Error(d.error);setProjects(d.projects||[]);}catch(e){setError(e instanceof Error?e.message:'Unable to load projects');}finally{setLoading(false)}}
  useEffect(()=>{load()},[]);
  async function create(e:React.FormEvent){e.preventDefault();setCreating(true);setError('');try{const r=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(form)});const d=await r.json();if(!r.ok)throw new Error(d.error);window.location.href=`/projects/${d.project.slug}`;}catch(e){setError(e instanceof Error?e.message:'Unable to create project');setCreating(false)}}
- return <main className="shell"><header className="header"><Link href="/" className="brand"><span>LG</span><b>LANDGRID</b></Link><Link href="/login" className="header-link">Sign out</Link></header>
+ async function signOut(){try{await fetch('/api/auth/signout',{method:'POST',credentials:'same-origin'});}finally{window.location.href='/login'}}
+ return <main className="shell"><header className="header"><Link href="/" className="brand"><span>LG</span><b>LANDGRID</b></Link><button type="button" className="header-link" onClick={signOut}>Sign out</button></header>
  <section className="page-heading"><div className="eyebrow">YOUR WORKSPACE</div><h1>Projects</h1><p>Open a project you have access to, or create a new project.</p></section>
  {error&&<div className="notice">{error}</div>}
  <section className="project-card" style={{marginBottom:24}}><div><div className="eyebrow">NEW PROJECT</div><h2>Create a project</h2><p>Add the location now. You can add your site plan, sections and drone view from the project settings.</p></div>
