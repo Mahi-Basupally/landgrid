@@ -12,11 +12,20 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const db = supabaseAdmin();
   const { data: exact, error: exactError } = await db.from('projects').select('slug,site_plan_url,drone_url').eq('slug', slug).maybeSingle();
   if (exactError) return NextResponse.json({ error: exactError.message }, { status: 500 });
-  if (exact) return NextResponse.json({ sitePlanUrl: exact.site_plan_url || null, droneUrl: exact.drone_url || null });
 
-  const { data: projects, error } = await db.from('projects').select('slug,site_plan_url,drone_url');
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const project = (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(slug));
+  let project = exact;
+  if (!project) {
+    const { data: projects, error } = await db.from('projects').select('slug,site_plan_url,drone_url');
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    project = (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(slug)) || null;
+  }
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  return NextResponse.json({ sitePlanUrl: project.site_plan_url || null, droneUrl: project.drone_url || null });
+
+  const assetUrl = (kind: 'master-plan' | 'drone', value?: string | null) =>
+    value ? `/api/projects/${encodeURIComponent(project!.slug)}/assets/file?kind=${kind}` : null;
+
+  return NextResponse.json({
+    sitePlanUrl: assetUrl('master-plan', project.site_plan_url),
+    droneUrl: assetUrl('drone', project.drone_url),
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }
