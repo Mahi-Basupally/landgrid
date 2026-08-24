@@ -7,13 +7,13 @@ type Props = {
   kind: 'master-plan' | 'drone' | 'media' | 'section';
   accept: string;
   currentUrl?: string | null;
-  onUploaded: (url: string) => void;
 };
 
-export default function ProjectAssetUpload({ slug, kind, accept, currentUrl, onUploaded }: Props) {
+export default function ProjectAssetUpload({ slug, kind, accept, currentUrl }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  const [uploadedUrl, setUploadedUrl] = useState(currentUrl || '');
 
   async function upload(file: File) {
     setUploading(true);
@@ -29,7 +29,8 @@ export default function ProjectAssetUpload({ slug, kind, accept, currentUrl, onU
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Upload failed');
-      onUploaded(data.url);
+      setUploadedUrl(data.url || '');
+      // The upload API persists master-plan and drone URLs directly in Supabase.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {
@@ -42,9 +43,9 @@ export default function ProjectAssetUpload({ slug, kind, accept, currentUrl, onU
     <div style={{ display: 'grid', gap: 8 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         <button type="button" className="button secondary" onClick={() => inputRef.current?.click()} disabled={uploading}>
-          {uploading ? 'Uploading…' : 'Upload file'}
+          {uploading ? 'Uploading…' : uploadedUrl ? 'Replace file' : 'Upload file'}
         </button>
-        {currentUrl && <span style={{ fontSize: 13, color: 'var(--muted, #6b7280)' }}>File uploaded</span>}
+        {uploadedUrl && <span style={{ fontSize: 13, color: 'var(--muted, #6b7280)' }}>File uploaded</span>}
       </div>
       <input ref={inputRef} type="file" accept={accept} hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
       {error && <small style={{ color: '#b91c1c' }}>{error}</small>}
