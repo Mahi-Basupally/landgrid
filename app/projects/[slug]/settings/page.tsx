@@ -27,13 +27,17 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
 
   let project = exactProject;
   if (!project) {
-    const { data: projects } = await db
+    const { data: projects, error } = await db
       .from('projects')
       .select('id,slug,name,address,description,google_location_url,site_plan_url,drone_url,created_by,created_at');
+    if (error) throw error;
     project = (projects || []).find((item) => normalizeSlug(item.slug) === normalizeSlug(requestedSlug)) || null;
   }
   if (!project) notFound();
 
+  // Always check membership against the canonical slug stored in the database.
+  // This allows /projects/capetown/settings to work for a project stored as
+  // "cape-town", while preserving the canonical URL for generated links.
   const role = await getMembership(user.id, project.slug);
   if (!role) notFound();
   if (role !== 'admin') redirect(`/projects/${project.slug}`);
@@ -47,7 +51,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
         <nav style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <Link className="button secondary" href={`/projects/${project.slug}`}>Project Home</Link>
           <Link className="button secondary" href={`/projects/${project.slug}/manage`}>Map &amp; Manage</Link>
-          <Link className="button secondary" href="/login">Sign out</Link>
+          <form action="/api/auth/signout" method="post"><button className="button secondary" type="submit">Sign out</button></form>
         </nav>
       </header>
 
