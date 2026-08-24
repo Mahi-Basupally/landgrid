@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import ProjectPlanViewer from '@/components/ProjectPlanViewer';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { robots: { index: false, follow: false } };
@@ -20,7 +21,7 @@ export default async function PublicProjectPage({ params }: Props) {
   return (
     <main className="shell">
       <header className="header">
-        <Link href="/projects" className="brand"><span>LG</span><b>LANDGRID</b></Link>
+        <Link href={`/projects/${project.slug}`} className="brand"><span>LG</span><b>LANDGRID</b></Link>
         <Link href={`/projects/${project.slug}/manage`} className="header-link">Map &amp; Manage</Link>
       </header>
       <section className="page-heading">
@@ -35,6 +36,9 @@ export default async function PublicProjectPage({ params }: Props) {
           <Link className="button primary" href={`/projects/${project.slug}/manage`}>Explore project</Link>
           {project.google_location_url && <a className="button secondary" href={project.google_location_url} target="_blank" rel="noreferrer">Open location</a>}
         </div>
+      </section>
+      <section style={{ marginTop: 24 }}>
+        <ProjectPlanViewer projectName={project.name} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
       </section>
     </main>
   );
