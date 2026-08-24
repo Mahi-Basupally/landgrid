@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getCurrentUserFromRequest, getMembership } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import ProjectPlanViewer from '@/components/ProjectPlanViewer';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,13 +41,10 @@ export default async function ManageProject({ params }: { params: Promise<{ slug
           <label>Plan<select defaultValue="master"><option value="master">Master Plan</option><option value="section-1">Section 1</option><option value="section-2">Section 2</option></select></label>
           <div style={{ marginTop: 18 }}>
             <div className="eyebrow">VIEW</div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}><button className="button secondary">Map</button><button className="button secondary">Drone</button></div>
+            <p style={{ marginTop: 8, color: 'var(--muted, #6b7280)' }}>Use Map / Drone above the plan to switch the project asset.</p>
           </div>
         </aside>
-        <section className="map-placeholder" style={{ minHeight: 520 }}>
-          <div className="map-toolbar"><div className="eyebrow">INTERACTIVE MAP</div><div><button>−</button><button>100%</button><button>+</button></div></div>
-          {project.site_plan_url ? <img src={project.site_plan_url} alt={`${project.name} site plan`} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} /> : <div className="map-copy">Add a master plan in project settings.</div>}
-        </section>
+        <ProjectPlanViewer projectName={project.name} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
         <aside className="details">
           <div className="eyebrow">PROJECT</div>
           <h2>Manage plots</h2>
