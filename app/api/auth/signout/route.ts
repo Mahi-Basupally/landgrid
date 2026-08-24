@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -10,13 +10,13 @@ export async function POST() {
     await supabaseAdmin().from('auth_sessions').delete().eq('token', token);
   }
 
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set('landgrid_user', '', {
+  cookieStore.set('landgrid_user', '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
   });
-  return response;
+
+  redirect('/');
 }
