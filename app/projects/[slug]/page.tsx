@@ -38,7 +38,7 @@ export default async function PublicProjectPage({ params }: Props) {
         </div>
       </section>
       <section style={{ marginTop: 24 }}>
-        <ProjectPlanViewer projectName={project.name} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
+        <ProjectPlanViewer projectName={project.name} projectSlug={project.slug} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
       </section>
     </main>
   );
