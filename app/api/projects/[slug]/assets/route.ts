@@ -15,7 +15,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const role = await getMembership(user.id, slug);
   if (role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
-  const { data: project } = await supabaseAdmin().from('projects').select('id').eq('slug', slug).maybeSingle();
+  const db = supabaseAdmin();
+  const { data: project } = await db.from('projects').select('id').eq('slug', slug).maybeSingle();
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
   const form = await req.formData();
@@ -27,13 +28,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
   const path = `projects/${project.id}/${kind}/${Date.now()}-${safeName}`;
-  const { error: uploadError } = await supabaseAdmin().storage.from('project-assets').upload(path, file, {
+  const { error: uploadError } = await db.storage.from('project-assets').upload(path, file, {
     contentType: file.type,
     upsert: false,
     cacheControl: '3600',
   });
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
 
-  const { data } = supabaseAdmin().storage.from('project-assets').getPublicUrl(path);
-  return NextResponse.json({ url: data.publicUrl, path });
+  const { data } = db.storage.from('project-assets').getPublicUrl(path);
+  const url = data.publicUrl;
+
+  if (kind === 'master-plan' || kind === 'drone') {
+    const field = kind === 'master-plan' ? 'site_plan_url' : 'drone_url';
+    const { error: updateError } = await db.from('projects').update({ [field]: url }).eq('id', project.id);
+    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ url, path });
 }
