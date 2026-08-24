@@ -1,0 +1,5 @@
+import Link from 'next/link';
+
+export default function Home() {
+  return <main className="shell"><header className="header"><Link href="/" className="brand"><span>LG</span><b>LANDGRID</b></Link><Link href="/login" className="header-link">Sign in</Link></header><section className="hero"><div className="eyebrow">INTERACTIVE SITE PLANS</div><h1>Map. Manage. Embed.</h1><p>Turn a static master plan into an interactive plot map your buyers can explore on any website.</p><div className="actions"><Link className="button primary" href="/projects">View projects</Link><Link className="button secondary" href="/login">Manage projects</Link></div></section><section className="feature-grid"><article><b>VIEW</b><h2>Let buyers explore</h2><p>Master plans, sections, plot status, price, area and enquiry in one clean experience.</p></article><article><b>MAP & MANAGE</b><h2>Keep inventory current</h2><p>Edit plot information and boundaries without maintaining a separate map application.</p></article><article><b>EMBED</b><h2>Put it anywhere</h2><p>Embed the same interactive map into an existing developer or sales website.</p></article></section></main>;
+}
