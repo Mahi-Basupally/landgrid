@@ -35,9 +35,6 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
   }
   if (!project) notFound();
 
-  // Always check membership against the canonical slug stored in the database.
-  // This allows /projects/capetown/settings to work for a project stored as
-  // "cape-town", while preserving the canonical URL for generated links.
   const role = await getMembership(user.id, project.slug);
   if (!role) notFound();
   if (role !== 'admin') redirect(`/projects/${project.slug}`);
@@ -94,13 +91,11 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
                 <div style={{ display: 'grid', gap: 18, marginTop: 14 }}>
                   <div>
                     <label>Master/site plan SVG or image</label>
-                    <ProjectAssetUpload slug={project.slug} kind="master-plan" accept="image/svg+xml,image/png,image/jpeg,image/webp" currentUrl={project.site_plan_url} onUploaded={() => {}} />
-                    <input name="sitePlanUrl" defaultValue={project.site_plan_url || ''} placeholder="Upload above or enter a URL" />
+                    <ProjectAssetUpload slug={project.slug} kind="master-plan" accept="image/svg+xml,image/png,image/jpeg,image/webp" currentUrl={project.site_plan_url} />
                   </div>
                   <div>
                     <label>Drone map image</label>
-                    <ProjectAssetUpload slug={project.slug} kind="drone" accept="image/png,image/jpeg,image/webp" currentUrl={project.drone_url} onUploaded={() => {}} />
-                    <input name="droneUrl" defaultValue={project.drone_url || ''} placeholder="Upload above or enter a URL" />
+                    <ProjectAssetUpload slug={project.slug} kind="drone" accept="image/png,image/jpeg,image/webp" currentUrl={project.drone_url} />
                   </div>
                   <div>
                     <label>Sections</label>
@@ -113,7 +108,7 @@ export default async function ProjectSettingsPage({ params }: { params: Promise<
                 <div className="eyebrow">3 · MEDIA</div>
                 <h2>Project media</h2>
                 <p>Upload project photos and videos to persistent project storage. These assets remain available after redeployment.</p>
-                <ProjectAssetUpload slug={project.slug} kind="media" accept="image/*,video/mp4,video/webm" onUploaded={() => {}} />
+                <ProjectAssetUpload slug={project.slug} kind="media" accept="image/*,video/mp4,video/webm" />
               </section>
 
               <section id="owner">
