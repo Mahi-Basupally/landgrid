@@ -20,7 +20,14 @@ function normalizeSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
-async function findProject(requestedSlug: string) {
+type ProjectAssetRow = {
+  id: string;
+  slug: string;
+  site_plan_url: string | null;
+  drone_url: string | null;
+};
+
+async function findProject(requestedSlug: string): Promise<ProjectAssetRow | null> {
   const db = supabaseAdmin();
   const { data: exactProject, error: exactError } = await db
     .from('projects')
@@ -28,13 +35,15 @@ async function findProject(requestedSlug: string) {
     .eq('slug', requestedSlug)
     .maybeSingle();
   if (exactError) throw new Error(exactError.message);
-  if (exactProject) return exactProject;
+  if (exactProject) return exactProject as ProjectAssetRow;
 
   const { data: projects, error } = await db
     .from('projects')
     .select('id,slug,site_plan_url,drone_url');
   if (error) throw new Error(error.message);
-  return (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(requestedSlug)) || null;
+  return ((projects || []) as ProjectAssetRow[]).find(
+    (p) => normalizeSlug(p.slug) === normalizeSlug(requestedSlug),
+  ) || null;
 }
 
 function storagePathFromUrl(value: string | null | undefined) {
@@ -85,10 +94,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     return NextResponse.json({ error: `Storage upload failed: ${uploadError.message}` }, { status: 500 });
   }
 
-  // Persist the exact bucket-relative object path. This is the source of truth;
-  // it survives Vercel deployments and avoids trying to reverse-engineer a URL later.
   if (kind === 'master-plan' || kind === 'drone') {
-    const field = kind === 'master-plan' ? 'site_plan_url' : 'drone_url';
+    const field: 'site_plan_url' | 'drone_url' = kind === 'master-plan' ? 'site_plan_url' : 'drone_url';
     const storedValue = `storage://${path}`;
 
     const { error: updateError } = await db
@@ -108,11 +115,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       return NextResponse.json({ error: `Project update failed: ${updateError.message}` }, { status: 500 });
     }
 
-    // Verify the database write. Never report a successful upload when the
-    // project row still has a null/old asset reference.
     const { data: verifiedProject, error: verifyError } = await db
       .from('projects')
-      .select(`id,slug,${field}`)
+      .select('id,slug,site_plan_url,drone_url')
       .eq('id', project.id)
       .maybeSingle();
 
@@ -128,14 +133,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
       return NextResponse.json({ error: `Project verification failed: ${verifyError.message}` }, { status: 500 });
     }
 
-    const savedValue = verifiedProject?.[field];
+    const savedValue = verifiedProject?.[field] ?? null;
     if (savedValue !== storedValue) {
       console.error('[asset-upload] project asset reference was not persisted', {
         projectId: project.id,
         slug: project.slug,
         field,
         expected: storedValue,
-        actual: savedValue ?? null,
+        actual: savedValue,
         path,
       });
       return NextResponse.json({
@@ -199,7 +204,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
   let storagePath = storagePathFromUrl(storedValue);
 
-  // Backward compatibility for deployments that previously saved an API URL.
   if (!storagePath && storedValue?.includes('/api/projects/')) {
     const db = supabaseAdmin();
     const { data: objects, error } = await db.storage
