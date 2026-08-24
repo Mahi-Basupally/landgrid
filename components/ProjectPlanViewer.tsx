@@ -47,7 +47,11 @@ export default function ProjectPlanViewer({ projectName, projectSlug, sitePlanUr
     return () => { active = false; };
   }, [projectSlug, sitePlanUrl, droneUrl]);
 
-  const url = view === 'map' ? assets.sitePlanUrl : assets.droneUrl;
+  const assetKind = view === 'map' ? 'master-plan' : 'drone';
+  const storageReference = view === 'map' ? assets.sitePlanUrl : assets.droneUrl;
+  const imageUrl = projectSlug && storageReference
+    ? `/api/projects/${encodeURIComponent(projectSlug)}/assets/file?kind=${assetKind}&v=1`
+    : '';
 
   return (
     <div className="map-placeholder" style={{ minHeight: 520, position: 'relative', overflow: 'hidden' }}>
@@ -61,9 +65,9 @@ export default function ProjectPlanViewer({ projectName, projectSlug, sitePlanUr
 
       {loading ? (
         <div className="map-copy" style={{ minHeight: 520, display: 'grid', placeItems: 'center', padding: 32 }}>Loading project plan…</div>
-      ) : url ? (
+      ) : imageUrl ? (
         <img
-          src={`${url}${url.includes('?') ? '&' : '?'}v=1`}
+          src={imageUrl}
           alt={`${projectName} ${view === 'map' ? 'master plan' : 'drone view'}`}
           style={{ width: '100%', height: '100%', minHeight: 520, objectFit: 'contain', display: 'block', paddingTop: 52 }}
           onError={() => setLoadError(`Unable to display the ${view === 'map' ? 'master plan' : 'drone image'}.`)}
