@@ -40,7 +40,6 @@ function storagePathFromUrl(value: string | null | undefined) {
   if (!value) return null;
   if (value.startsWith('storage://')) return value.slice('storage://'.length);
 
-  // Supports Supabase public URLs created by older versions of the uploader.
   const marker = '/storage/v1/object/public/project-assets/';
   const index = value.indexOf(marker);
   if (index >= 0) return decodeURIComponent(value.slice(index + marker.length));
@@ -57,6 +56,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   try {
     project = await findProject(requestedSlug);
   } catch (error) {
+    console.error('[asset-upload] project lookup failed', { requestedSlug, error });
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Project lookup failed' }, { status: 500 });
   }
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -79,18 +79,60 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     upsert: false,
     cacheControl: '31536000',
   });
-  if (uploadError) return NextResponse.json({ error: `Storage upload failed: ${uploadError.message}` }, { status: 500 });
+  if (uploadError) {
+    console.error('[asset-upload] storage upload failed', { projectId: project.id, slug: project.slug, kind, path, error: uploadError });
+    return NextResponse.json({ error: `Storage upload failed: ${uploadError.message}` }, { status: 500 });
+  }
 
-  // Store an application URL rather than a deployment-local file path or a
-  // public Storage URL. This keeps the actual asset in Supabase Storage and
-  // makes Vercel redeployments independent of the asset location.
   const assetUrl = `/api/projects/${encodeURIComponent(project.slug)}/assets?kind=${encodeURIComponent(kind)}&v=${Date.now()}`;
 
   if (kind === 'master-plan' || kind === 'drone') {
     const field = kind === 'master-plan' ? 'site_plan_url' : 'drone_url';
-    const { error: updateError } = await db.from('projects').update({ [field]: assetUrl }).eq('id', project.id);
-    if (updateError) return NextResponse.json({ error: `Project update failed: ${updateError.message}` }, { status: 500 });
+    const { data: updatedProject, error: updateError } = await db
+      .from('projects')
+      .update({ [field]: assetUrl })
+      .eq('id', project.id)
+      .select('id,slug,site_plan_url,drone_url')
+      .single();
+
+    if (updateError) {
+      console.error('[asset-upload] project asset URL update failed', {
+        projectId: project.id,
+        slug: project.slug,
+        field,
+        assetUrl,
+        path,
+        error: updateError,
+      });
+      return NextResponse.json({ error: `Project update failed: ${updateError.message}` }, { status: 500 });
+    }
+
+    console.info('[asset-upload] asset saved', {
+      projectId: project.id,
+      slug: project.slug,
+      kind,
+      storagePath: path,
+      assetUrl,
+      savedValue: updatedProject?.[field],
+    });
+
+    return NextResponse.json({
+      ok: true,
+      url: assetUrl,
+      path,
+      kind,
+      projectSlug: project.slug,
+      savedValue: updatedProject?.[field] ?? null,
+    });
   }
+
+  console.info('[asset-upload] media asset saved', {
+    projectId: project.id,
+    slug: project.slug,
+    kind,
+    storagePath: path,
+    assetUrl,
+  });
 
   return NextResponse.json({ ok: true, url: assetUrl, path, kind, projectSlug: project.slug });
 }
@@ -107,15 +149,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
   try {
     project = await findProject(requestedSlug);
   } catch (error) {
+    console.error('[asset-get] project lookup failed', { requestedSlug, kind, error });
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Project lookup failed' }, { status: 500 });
   }
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
   const storedValue = kind === 'master-plan' ? project.site_plan_url : project.drone_url;
+  console.info('[asset-get] resolving asset', { requestedSlug, projectId: project.id, kind, storedValue });
+
   let storagePath = storagePathFromUrl(storedValue);
 
-  // New uploads store an internal application URL. Recover the object path
-  // from the project id and kind by listing that project's asset directory.
   if (!storagePath && storedValue?.includes('/api/projects/')) {
     const db = supabaseAdmin();
     const { data: objects, error } = await db.storage
@@ -126,7 +169,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     if (latest) storagePath = `projects/${project.id}/${kind}/${latest.name}`;
   }
 
-  if (!storagePath) return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
+  if (!storagePath) return NextResponse.json({ error: 'Asset not configured' }, { status: 404 });
 
   const db = supabaseAdmin();
   const { data, error } = await db.storage.from('project-assets').download(storagePath);
