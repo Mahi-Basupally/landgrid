@@ -39,12 +39,9 @@ export default async function ManageProject({ params }: { params: Promise<{ slug
         <aside className="panel">
           <h3>Project plan</h3>
           <label>Plan<select defaultValue="master"><option value="master">Master Plan</option><option value="section-1">Section 1</option><option value="section-2">Section 2</option></select></label>
-          <div style={{ marginTop: 18 }}>
-            <div className="eyebrow">VIEW</div>
-            <p style={{ marginTop: 8, color: 'var(--muted, #6b7280)' }}>Use Map / Drone above the plan to switch the project asset.</p>
-          </div>
+          <div style={{ marginTop: 18 }}><div className="eyebrow">VIEW</div><p style={{ marginTop: 8, color: 'var(--muted, #6b7280)' }}>Switch between the saved master plan and drone view above the map.</p></div>
         </aside>
-        <ProjectPlanViewer projectName={project.name} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
+        <ProjectPlanViewer projectName={project.name} projectSlug={project.slug} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
         <aside className="details">
           <div className="eyebrow">PROJECT</div>
           <h2>Manage plots</h2>
