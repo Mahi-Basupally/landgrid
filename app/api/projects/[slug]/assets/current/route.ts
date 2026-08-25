@@ -21,8 +21,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   }
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
-  const assetUrl = (kind: 'master-plan' | 'drone', value?: string | null) =>
-    value ? `/api/projects/${encodeURIComponent(project!.slug)}/assets/file?kind=${kind}` : null;
+  const { data: plans, error } = await db
+    .from('project_site_plans')
+    .select('plan_type,map_url,drone_url')
+    .eq('project_id', project.id)
+    .order('plan_type');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const master = (plans || []).find((p) => p.plan_type === 'master_plan');
+  const assetUrl = (kind: 'master-plan' | 'drone', value?: string | null, planType = 'master_plan') =>
+    value ? `/api/projects/${encodeURIComponent(project!.slug)}/assets?kind=${kind}&planType=${encodeURIComponent(planType)}` : null;
 
   const { data: sections, error: sectionError } = await db
     .from('project_sections')

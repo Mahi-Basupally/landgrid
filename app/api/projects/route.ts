@@ -21,7 +21,7 @@ export async function GET() {
 
     const { data, error } = await supabaseAdmin()
       .from('project_members')
-      .select('role, projects!inner(id,slug,name,address,description,google_location_url,site_plan_url,drone_url,created_at)')
+      .select('role, projects!inner(id,slug,name,address,description,google_location_url,created_at)')
       .eq('user_id', user.id)
       .order('created_at', { referencedTable: 'projects', ascending: false });
     if (error) throw error;
@@ -58,14 +58,13 @@ export async function POST(req: Request) {
       google_location_url: String(body.googleLocationUrl || '').trim() || null,
       description: String(body.description || '').trim() || null,
       created_by: user.id,
-      site_plan_url: String(body.sitePlanUrl || '').trim() || null,
-      drone_url: String(body.droneUrl || '').trim() || null,
     }).select('*').single();
     if (projectError) throw projectError;
 
     const { error: memberError } = await supabaseAdmin().from('project_members').insert({ project_id: project.id, user_id: user.id, role: 'admin' });
     if (memberError) throw memberError;
 
+    // The database trigger creates the master_plan record automatically.
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
     console.error('projects POST failed', error);
