@@ -6,55 +6,18 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const allowed = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-  'video/mp4',
-  'video/webm',
-]);
+const allowed = new Set(['image/jpeg','image/png','image/webp','image/gif','image/svg+xml']);
 
-function normalizeSlug(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+function normalizeSlug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
-type ProjectRow = { id: string; slug: string; created_by: string | null };
-
-type PlanRow = {
-  id: string;
-  project_id: string;
-  plan_type: string;
-  map_url: string | null;
-  drone_url: string | null;
-};
-
-async function findProject(requestedSlug: string): Promise<ProjectRow | null> {
+async function findProject(requestedSlug: string) {
   const db = supabaseAdmin();
-  const { data: exactProject, error: exactError } = await db
-    .from('projects')
-    .select('id,slug,created_by')
-    .eq('slug', requestedSlug)
-    .maybeSingle();
-  if (exactError) throw new Error(exactError.message);
-  if (exactProject) return exactProject as ProjectRow;
-
-  const { data: projects, error } = await db.from('projects').select('id,slug,created_by');
-  if (error) throw new Error(error.message);
-  return ((projects || []) as ProjectRow[]).find((p) => normalizeSlug(p.slug) === normalizeSlug(requestedSlug)) || null;
-}
-
-async function requireAdmin(project: ProjectRow) {
-  const token = (await cookies()).get('landgrid_user')?.value;
-  const user = await getUserFromSession(token);
-  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-
-  const role = await getMembership(user.id, project.slug);
-  if (role !== 'admin' && project.created_by !== user.id) {
-    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) };
-  }
-  return { user };
+  const { data: exact, error } = await db.from('projects').select('id,slug,site_plan_url,drone_url').eq('slug', requestedSlug).maybeSingle();
+  if (error) throw error;
+  if (exact) return exact;
+  const { data: projects, error: listError } = await db.from('projects').select('id,slug,site_plan_url,drone_url');
+  if (listError) throw listError;
+  return (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(requestedSlug)) || null;
 }
 
 function storagePathFromUrl(value: string | null | undefined) {
@@ -65,110 +28,80 @@ function storagePathFromUrl(value: string | null | undefined) {
   return index >= 0 ? decodeURIComponent(value.slice(index + marker.length)) : null;
 }
 
-function validPlanType(value: string) {
-  return value === 'master_plan' || /^section_\d+$/.test(value);
-}
-
-async function getPlan(projectId: string, planType: string) {
-  const { data, error } = await supabaseAdmin()
-    .from('project_site_plans')
-    .select('id,project_id,plan_type,map_url,drone_url')
-    .eq('project_id', projectId)
-    .eq('plan_type', planType)
-    .maybeSingle();
-  if (error) throw error;
-  return data as PlanRow | null;
-}
-
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug: requestedSlug } = await params;
+  const token = (await cookies()).get('landgrid_user')?.value;
+  const user = await getUserFromSession(token);
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const project = await findProject(requestedSlug);
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-
-  const access = await requireAdmin(project);
-  if (access.error) return access.error;
+  const role = await getMembership(user.id, project.slug);
+  if (role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
 
   const form = await req.formData();
   const file = form.get('file');
   const kind = String(form.get('kind') || 'media');
-  const planType = String(form.get('planType') || 'master_plan').trim().toLowerCase();
+  const sectionId = String(form.get('sectionId') || '');
   if (!(file instanceof File)) return NextResponse.json({ error: 'File is required' }, { status: 400 });
   if (!allowed.has(file.type)) return NextResponse.json({ error: `Unsupported file type: ${file.type || 'unknown'}` }, { status: 400 });
   if (file.size > 50 * 1024 * 1024) return NextResponse.json({ error: 'File must be 50MB or smaller' }, { status: 400 });
 
-  if (kind === 'master-plan' || kind === 'drone') {
-    if (!validPlanType(planType)) return NextResponse.json({ error: 'Invalid plan type' }, { status: 400 });
-
-    const db = supabaseAdmin();
-    const { error: planError } = await db.from('project_site_plans').upsert(
-      { project_id: project.id, plan_type: planType },
-      { onConflict: 'project_id,plan_type' },
-    );
-    if (planError) return NextResponse.json({ error: `Plan creation failed: ${planError.message}` }, { status: 500 });
-
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-    const storageKind = planType === 'master_plan'
-      ? (kind === 'master-plan' ? 'master-plan' : 'drone')
-      : `${planType}/${kind === 'master-plan' ? 'map' : 'drone'}`;
-    const path = `projects/${project.id}/${storageKind}/${Date.now()}-${safeName}`;
-    const { error: uploadError } = await db.storage.from('project-assets').upload(path, file, {
-      contentType: file.type || 'application/octet-stream',
-      upsert: false,
-      cacheControl: '31536000',
-    });
-    if (uploadError) {
-      console.error('[asset-upload] storage upload failed', { projectId: project.id, slug: project.slug, planType, kind, path, error: uploadError });
-      return NextResponse.json({ error: `Storage upload failed: ${uploadError.message}` }, { status: 500 });
-    }
-
-    const field = kind === 'master-plan' ? 'map_url' : 'drone_url';
-    const storedValue = `storage://${path}`;
-    const { error: updateError } = await db.from('project_site_plans').update({ [field]: storedValue }).eq('project_id', project.id).eq('plan_type', planType);
-    if (updateError) return NextResponse.json({ error: `Plan update failed: ${updateError.message}` }, { status: 500 });
-
-    return NextResponse.json({
-      ok: true,
-      url: `/api/projects/${encodeURIComponent(project.slug)}/assets?kind=${encodeURIComponent(kind)}&planType=${encodeURIComponent(planType)}&v=${Date.now()}`,
-      path,
-      kind,
-      planType,
-      savedValue: storedValue,
-    });
+  const sectionKind = kind === 'section-master-plan' || kind === 'section-drone';
+  if (sectionKind && !sectionId) return NextResponse.json({ error: 'sectionId is required' }, { status: 400 });
+  if (sectionKind) {
+    const { data: section } = await supabaseAdmin().from('project_sections').select('id').eq('id', sectionId).eq('project_id', project.id).maybeSingle();
+    if (!section) return NextResponse.json({ error: 'Section not found' }, { status: 404 });
   }
 
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
-  const path = `projects/${project.id}/media/${Date.now()}-${safeName}`;
+  const path = `projects/${project.id}/${sectionKind ? `sections/${sectionId}/${kind}` : kind}/${Date.now()}-${safeName}`;
   const db = supabaseAdmin();
-  const { error: uploadError } = await db.storage.from('project-assets').upload(path, file, {
-    contentType: file.type || 'application/octet-stream', upsert: false, cacheControl: '31536000',
-  });
+  const { error: uploadError } = await db.storage.from('project-assets').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false, cacheControl: '31536000' });
   if (uploadError) return NextResponse.json({ error: `Storage upload failed: ${uploadError.message}` }, { status: 500 });
 
-  return NextResponse.json({ ok: true, url: `/api/projects/${encodeURIComponent(project.slug)}/assets?kind=media&v=${Date.now()}`, path, kind });
+  const storedValue = `storage://${path}`;
+  if (sectionKind) {
+    const field = kind === 'section-master-plan' ? 'master_plan_url' : 'drone_url';
+    const { error } = await db.from('project_sections').update({ [field]: storedValue }).eq('id', sectionId).eq('project_id', project.id);
+    if (error) return NextResponse.json({ error: `Section update failed: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ ok: true, path, kind, sectionId, savedValue: storedValue });
+  }
+
+  if (kind === 'master-plan' || kind === 'drone') {
+    const field = kind === 'master-plan' ? 'site_plan_url' : 'drone_url';
+    const { error } = await db.from('projects').update({ [field]: storedValue }).eq('id', project.id);
+    if (error) return NextResponse.json({ error: `Project update failed: ${error.message}` }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, path, kind, projectSlug: project.slug, savedValue: storedValue });
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug: requestedSlug } = await params;
   const url = new URL(req.url);
   const kind = url.searchParams.get('kind');
-  const planType = (url.searchParams.get('planType') || 'master_plan').trim().toLowerCase();
-  if (kind !== 'master-plan' && kind !== 'drone') return NextResponse.json({ error: 'Invalid asset kind' }, { status: 400 });
-  if (!validPlanType(planType)) return NextResponse.json({ error: 'Invalid plan type' }, { status: 400 });
+  const sectionId = url.searchParams.get('section');
+  const validKind = kind === 'master-plan' || kind === 'drone' || kind === 'section-master-plan' || kind === 'section-drone';
+  if (!validKind) return NextResponse.json({ error: 'Invalid asset kind' }, { status: 400 });
 
   const project = await findProject(requestedSlug);
   if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  const plan = await getPlan(project.id, planType);
-  if (!plan) return NextResponse.json({ error: 'Plan not configured' }, { status: 404 });
+  let storedValue: string | null = null;
+  if (kind.startsWith('section-')) {
+    if (!sectionId) return NextResponse.json({ error: 'section is required' }, { status: 400 });
+    const { data: section, error } = await supabaseAdmin().from('project_sections').select('master_plan_url,drone_url').eq('id', sectionId).eq('project_id', project.id).maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    storedValue = kind === 'section-master-plan' ? section?.master_plan_url || null : section?.drone_url || null;
+  } else {
+    storedValue = kind === 'master-plan' ? project.site_plan_url : project.drone_url;
+  }
 
-  const storedValue = kind === 'master-plan' ? plan.map_url : plan.drone_url;
-  let storagePath = storagePathFromUrl(storedValue);
+  const storagePath = storagePathFromUrl(storedValue);
   if (!storagePath) return NextResponse.json({ error: 'Asset not configured' }, { status: 404 });
-
-  const db = supabaseAdmin();
-  const { data, error } = await db.storage.from('project-assets').download(storagePath);
+  const { data, error } = await supabaseAdmin().storage.from('project-assets').download(storagePath);
   if (error || !data) return NextResponse.json({ error: `Storage download failed: ${error?.message || 'file not found'}` }, { status: 404 });
 
   const lower = storagePath.toLowerCase();
-  const contentType = data.type || (lower.endsWith('.svg') ? 'image/svg+xml' : lower.endsWith('.png') ? 'image/png' : lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'image/jpeg' : lower.endsWith('.webp') ? 'image/webp' : 'application/octet-stream');
+  const contentType = data.type || (lower.endsWith('.svg') ? 'image/svg+xml' : lower.endsWith('.png') ? 'image/png' : lower.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
   return new NextResponse(data, { status: 200, headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable', 'Content-Disposition': 'inline' } });
 }

@@ -10,12 +10,12 @@ function normalizeSlug(value: string) {
 export async function GET(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const db = supabaseAdmin();
-  const { data: exact, error: exactError } = await db.from('projects').select('id,slug').eq('slug', slug).maybeSingle();
+  const { data: exact, error: exactError } = await db.from('projects').select('id,slug,site_plan_url,drone_url').eq('slug', slug).maybeSingle();
   if (exactError) return NextResponse.json({ error: exactError.message }, { status: 500 });
 
   let project = exact;
   if (!project) {
-    const { data: projects, error } = await db.from('projects').select('id,slug');
+    const { data: projects, error } = await db.from('projects').select('id,slug,site_plan_url,drone_url');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     project = (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(slug)) || null;
   }
@@ -32,13 +32,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   const assetUrl = (kind: 'master-plan' | 'drone', value?: string | null, planType = 'master_plan') =>
     value ? `/api/projects/${encodeURIComponent(project!.slug)}/assets?kind=${kind}&planType=${encodeURIComponent(planType)}` : null;
 
+  const { data: sections, error: sectionError } = await db
+    .from('project_sections')
+    .select('id,name,sort_order,master_plan_url,drone_url')
+    .eq('project_id', project.id)
+    .order('sort_order', { ascending: true });
+  if (sectionError) return NextResponse.json({ error: sectionError.message }, { status: 500 });
+
   return NextResponse.json({
-    sitePlanUrl: assetUrl('master-plan', master?.map_url, 'master_plan'),
-    droneUrl: assetUrl('drone', master?.drone_url, 'master_plan'),
-    plans: (plans || []).map((plan) => ({
-      planType: plan.plan_type,
-      mapUrl: assetUrl('master-plan', plan.map_url, plan.plan_type),
-      droneUrl: assetUrl('drone', plan.drone_url, plan.plan_type),
+    sitePlanUrl: assetUrl('master-plan', project.site_plan_url),
+    droneUrl: assetUrl('drone', project.drone_url),
+    sections: (sections || []).map((section) => ({
+      id: section.id,
+      name: section.name,
+      sortOrder: section.sort_order,
+      masterPlanUrl: section.master_plan_url ? `/api/projects/${encodeURIComponent(project!.slug)}/assets/file?kind=section-master-plan&section=${section.id}` : null,
+      droneUrl: section.drone_url ? `/api/projects/${encodeURIComponent(project!.slug)}/assets/file?kind=section-drone&section=${section.id}` : null,
     })),
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
