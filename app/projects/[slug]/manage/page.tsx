@@ -47,7 +47,8 @@ export default async function ManageProject({ params }: { params: Promise<{ slug
           <h2>Manage plots</h2>
           <p>Use this workspace to manage the project's map and plot inventory.</p>
           <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
-            <Link className="button primary full" href={`/projects/${slug}`}>View public project</Link>
+            <Link className="button primary full" href={`/projects/${slug}/editor`}>Edit lots</Link>
+            <Link className="button secondary full" href={`/projects/${slug}`}>View public project</Link>
             {role === 'admin' && <Link className="button secondary full" href={`/projects/${slug}/settings`}>Project settings</Link>}
           </div>
         </aside>
