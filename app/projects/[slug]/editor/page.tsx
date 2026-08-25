@@ -1,4 +1,4 @@
-import LotEditor from '@/components/lot-editor';
+import PlotEditor from '@/components/plot-editor';
 
 export default async function ProjectEditorPage({
   params,
@@ -6,5 +6,5 @@ export default async function ProjectEditorPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <LotEditor projectSlug={slug} />;
+  return <PlotEditor projectSlug={slug} />;
 }
