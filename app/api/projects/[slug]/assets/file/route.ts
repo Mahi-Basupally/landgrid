@@ -9,16 +9,24 @@ function normalizeSlug(value: string) {
 }
 
 function storagePath(value: string) {
-  // New uploads store the bucket-relative Storage object path directly.
-  if (!value.startsWith('http://') && !value.startsWith('https://')) {
-    return value.replace(/^\/+/, '');
+  const raw = value.trim();
+
+  // Our application stores bucket-relative paths, sometimes prefixed with
+  // `storage://` for clarity. Supabase Storage expects the path relative to
+  // the bucket, so remove that prefix before downloading.
+  if (raw.startsWith('storage://')) {
+    return decodeURIComponent(raw.slice('storage://'.length).replace(/^\/+/, ''));
+  }
+
+  if (!raw.startsWith('http://') && !raw.startsWith('https://')) {
+    return decodeURIComponent(raw.replace(/^\/+/, ''));
   }
 
   // Backward compatibility with existing public Storage URLs.
   const marker = '/project-assets/';
-  const index = value.indexOf(marker);
+  const index = raw.indexOf(marker);
   if (index >= 0) {
-    return decodeURIComponent(value.slice(index + marker.length).split('?')[0]);
+    return decodeURIComponent(raw.slice(index + marker.length).split('?')[0]);
   }
 
   return null;
