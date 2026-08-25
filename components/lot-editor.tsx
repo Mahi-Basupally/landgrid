@@ -4,227 +4,65 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Eye, EyeOff, FolderOpen, Grid2X2, Minus, MousePointer2, Move, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import styles from "./lot-editor.module.css";
 
-type Lot = { id: string; number: string; status: string; area: number | string | null; price: number | string | null; model: string; owner: string; direction: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
-type Plan = { id: string; name: string; sortOrder: number; masterPlanUrl?: string | null; droneUrl?: string | null };
-type Point = { x: number; y: number };
+type Lot = { id:string; number:string; status:string; area:number|string|null; price:number|string|null; model:string; owner:string; direction:string; points:string; labelX:number; labelY:number; sectionId?:string|null };
+type Plan = { id:string; name:string; sortOrder:number; masterPlanUrl?:string|null; droneUrl?:string|null };
+type Point = {x:number;y:number};
 
-const parse = (s: string): Point[] => s.trim().split(/\s+/).map(v => v.split(",").map(Number)).filter(v => Number.isFinite(v[0]) && Number.isFinite(v[1])).map(([x, y]) => ({ x, y }));
-const pointString = (p: Point[]) => p.map(v => `${Math.round(v.x)},${Math.round(v.y)}`).join(" ");
-const bounds = (lots: Lot[]) => {
-  const p = lots.flatMap(l => parse(l.points));
-  if (!p.length) return { minX: 0, minY: 0, maxX: 1600, maxY: 1000 };
-  return { minX: Math.min(...p.map(v => v.x)), minY: Math.min(...p.map(v => v.y)), maxX: Math.max(...p.map(v => v.x)), maxY: Math.max(...p.map(v => v.y)) };
-};
+const parse=(s:string):Point[]=>s.trim().split(/\s+/).map(v=>v.split(",").map(Number)).filter(v=>Number.isFinite(v[0])&&Number.isFinite(v[1])).map(([x,y])=>({x,y}));
+const pointString=(p:Point[])=>p.map(v=>`${Math.round(v.x)},${Math.round(v.y)}`).join(" ");
+const bounds=(lots:Lot[])=>{const p=lots.flatMap(l=>parse(l.points));if(!p.length)return{minX:0,minY:0,maxX:1600,maxY:1000};return{minX:Math.min(...p.map(v=>v.x)),minY:Math.min(...p.map(v=>v.y)),maxX:Math.max(...p.map(v=>v.x)),maxY:Math.max(...p.map(v=>v.y))};};
 
-export default function LotEditor({ projectSlug }: { projectSlug: string }) {
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [lots, setLots] = useState<Lot[]>([]);
-  const [planId, setPlanId] = useState("master_plan");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<"map" | "drone">("map");
-  const [zoom, setZoom] = useState(1);
-  const [showImage, setShowImage] = useState(true);
-  const [tool, setTool] = useState<"select" | "draw" | "pan">("select");
-  const [draft, setDraft] = useState<Point[]>([]);
-  const [dirty, setDirty] = useState(false);
-  const [message, setMessage] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const jsonRef = useRef<HTMLInputElement>(null);
+export default function LotEditor({projectSlug}:{projectSlug:string}){
+ const [plans,setPlans]=useState<Plan[]>([]),[lots,setLots]=useState<Lot[]>([]),[planId,setPlanId]=useState("master_plan"),[selected,setSelected]=useState<string|null>(null),[view,setView]=useState<"map"|"drone">("map"),[zoom,setZoom]=useState(1),[showImage,setShowImage]=useState(true),[tool,setTool]=useState<"select"|"draw"|"pan">("select"),[draft,setDraft]=useState<Point[]>([]),[dirty,setDirty]=useState(false),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+ const fileRef=useRef<HTMLInputElement>(null),jsonRef=useRef<HTMLInputElement>(null);
+ const plan=plans.find(p=>p.id===planId)||plans[0];
+ const visible=useMemo(()=>lots.filter(l=>(l.sectionId||"master_plan")===plan?.id),[lots,plan]);
+ const selectedLot=lots.find(l=>l.id===selected)||null;
+ const b=bounds(visible),pad=100,baseWidth=Math.max(1,b.maxX-b.minX+pad*2),baseHeight=Math.max(1,b.maxY-b.minY+pad*2),cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;
+ const viewWidth=baseWidth/zoom,viewHeight=baseHeight/zoom,viewBox=`${cx-viewWidth/2} ${cy-viewHeight/2} ${viewWidth} ${viewHeight}`;
+ const asset=plan&&(view==="map"?plan.masterPlanUrl:plan.droneUrl);
+ const assetUrl=asset?`/api/projects/${encodeURIComponent(projectSlug)}/assets/file?kind=${view==="map"?"master-plan":"drone"}&planType=${encodeURIComponent(plan.id)}&v=${encodeURIComponent(asset)}`:null;
+ const imageBox={x:b.minX-pad,y:b.minY-pad,width:baseWidth,height:baseHeight};
 
-  const plan = plans.find(p => p.id === planId) || plans[0];
-  const visible = useMemo(() => lots.filter(l => (l.sectionId || "master_plan") === plan?.id), [lots, plan]);
-  const selectedLot = lots.find(l => l.id === selected) || null;
-  const b = bounds(visible);
-  const baseWidth = Math.max(1, b.maxX - b.minX + 200);
-  const baseHeight = Math.max(1, b.maxY - b.minY + 200);
-  const baseCenterX = (b.minX + b.maxX) / 2;
-  const baseCenterY = (b.minY + b.maxY) / 2;
-  const viewWidth = baseWidth / zoom;
-  const viewHeight = baseHeight / zoom;
-  const viewBox = `${baseCenterX - viewWidth / 2} ${baseCenterY - viewHeight / 2} ${viewWidth} ${viewHeight}`;
-  const asset = plan && (view === "map" ? plan.masterPlanUrl : plan.droneUrl);
-  const assetUrl = asset ? `/api/projects/${encodeURIComponent(projectSlug)}/assets/file?kind=${view === "map" ? "master-plan" : "drone"}&planType=${encodeURIComponent(plan.id)}&v=${encodeURIComponent(asset)}` : null;
+ async function load(){try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`,{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to load plan");setPlans(d.sections||[]);setLots(d.lots||[]);setPlanId((p:string)=>(d.sections||[]).some((x:Plan)=>x.id===p)?p:d.sections?.[0]?.id||"master_plan");}catch(e){setMessage(e instanceof Error?e.message:"Unable to load plan");}}
+ useEffect(()=>{void load();},[projectSlug]);
+ async function save(){if(busy)return;setBusy(true);try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sections:plans,lots})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to save");setDirty(false);setMessage("Saved");}catch(e){setMessage(e instanceof Error?e.message:"Unable to save");}finally{setBusy(false);}}
+ async function addSection(){if(busy)return;const n=Math.max(0,...plans.map(p=>Number(p.id.match(/^section_(\d+)$/)?.[1]||0)))+1,id=`section_${n}`;setBusy(true);try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plans`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({planType:id})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to add section");setPlans(v=>[...v,{id,name:`Section ${n}`,sortOrder:n,masterPlanUrl:null,droneUrl:null}]);setPlanId(id);setSelected(null);setDraft([]);setTool("select");setZoom(1);setMessage(`Section ${n} added`);}catch(e){setMessage(e instanceof Error?e.message:"Unable to add section");}finally{setBusy(false);}}
+ async function deleteSection(p:Plan){if(p.id==="master_plan"||busy)return;const ok=window.confirm(`Delete ${p.name}? This removes the section plan and its lots.`);if(!ok)return;setBusy(true);try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plans`,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({planType:p.id})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to delete section");setPlans(v=>v.filter(x=>x.id!==p.id));setLots(v=>v.filter(l=>(l.sectionId||"master_plan")!==p.id));if(planId===p.id){setPlanId("master_plan");setSelected(null);setDraft([]);setZoom(1);}setDirty(false);setMessage(`${p.name} deleted`);}catch(e){setMessage(e instanceof Error?e.message:"Unable to delete section");}finally{setBusy(false);}}
+ async function upload(file:File){if(!plan)return;try{const f=new FormData();f.append("file",file);f.append("planType",plan.id);f.append("kind",view==="map"?"master-plan":"drone");const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/assets`,{method:"POST",body:f});const d=await r.json();if(!r.ok)throw new Error(d.error||"Upload failed");setPlans(v=>v.map(p=>p.id===plan.id?{...p,...(view==="map"?{masterPlanUrl:d.savedValue}:{droneUrl:d.savedValue})}:p));setMessage(`${view} uploaded`);}catch(e){setMessage(e instanceof Error?e.message:"Upload failed");}}
+ function importLots(file:File){const r=new FileReader();r.onload=()=>{try{const data=JSON.parse(String(r.result));const rows=Array.isArray(data)?data:[];const imported=rows.map((x:any,i:number)=>({id:String(x.id||crypto.randomUUID()),number:String(x.number||i+1),status:String(x.status||"available"),area:x.area??null,price:x.price??null,model:String(x.model||""),owner:String(x.owner||""),direction:String(x.direction||""),points:String(x.points||""),labelX:Number(x.labelX||0),labelY:Number(x.labelY||0),sectionId:planId}));setLots(v=>[...v.filter(l=>(l.sectionId||"master_plan")!==planId),...imported]);setDirty(true);setMessage(`${imported.length} lots imported`);}catch{setMessage("Invalid lots.json");}};r.readAsText(file);}
+ function exportLots(){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(visible,null,2)],{type:"application/json"}));a.download=`${plan?.id||"master_plan"}-lots.json`;a.click();URL.revokeObjectURL(a.href);}
+ function canvasPoint(e:React.MouseEvent<SVGSVGElement>):Point{const svg=e.currentTarget,rect=svg.getBoundingClientRect(),vb=svg.viewBox.baseVal;return{x:vb.x+((e.clientX-rect.left)/rect.width)*vb.width,y:vb.y+((e.clientY-rect.top)/rect.height)*vb.height};}
+ function handleCanvasClick(e:React.MouseEvent<SVGSVGElement>){if(tool!=="draw")return;e.preventDefault();e.stopPropagation();setDraft(v=>[...v,canvasPoint(e)]);}
+ function finishDraw(){if(draft.length<3||!plan){setMessage("Add at least 3 points to create a lot");return;}const nums=visible.map(l=>Number(l.number)).filter(Number.isFinite),n=String((nums.length?Math.max(...nums):0)+1),c=draft.reduce((a,p)=>({x:a.x+p.x/draft.length,y:a.y+p.y/draft.length}),{x:0,y:0});const lot:Lot={id:crypto.randomUUID(),number:n,status:"available",area:null,price:null,model:"",owner:"",direction:"",points:pointString(draft),labelX:c.x,labelY:c.y,sectionId:plan.id};setLots(v=>[...v,lot]);setSelected(lot.id);setDraft([]);setTool("select");setDirty(true);setMessage(`Lot ${n} created`);}
+ function startAddLot(){if(!plan||busy)return;setDraft([]);setSelected(null);setTool("draw");setMessage("Click 3 or more points around the lot, then Finish lot");}
+ function updateSelected(field:keyof Lot,value:string){if(!selected)return;setLots(v=>v.map(l=>l.id===selected?{...l,[field]:value}:l));setDirty(true);}
+ function deleteSelected(){if(!selected)return;const n=selectedLot?.number;setLots(v=>v.filter(l=>l.id!==selected));setSelected(null);setDirty(true);setMessage(`Lot ${n||""} deleted`);}
+ function selectPlan(id:string){setPlanId(id);setSelected(null);setDraft([]);setTool("select");setZoom(1);setView("map");}
 
-  async function load() {
-    try {
-      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { cache: "no-store" });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Unable to load plan");
-      setPlans(d.sections || []);
-      setLots(d.lots || []);
-      setPlanId((p: string) => (d.sections || []).some((x: Plan) => x.id === p) ? p : d.sections?.[0]?.id || "master_plan");
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Unable to load plan");
-    }
-  }
-
-  useEffect(() => { void load(); }, [projectSlug]);
-
-  async function save() {
-    try {
-      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sections: plans, lots }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Unable to save");
-      setDirty(false);
-      setMessage("Saved");
-      void load();
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Unable to save");
-    }
-  }
-
-  async function addSection() {
-    const n = Math.max(0, ...plans.map(p => Number(p.id.match(/^section_(\d+)$/)?.[1] || 0))) + 1;
-    const id = `section_${n}`;
-    try {
-      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plans`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ planType: id }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Unable to add section");
-      setPlans(v => [...v, { id, name: `Section ${n}`, sortOrder: n, masterPlanUrl: null, droneUrl: null }]);
-      setPlanId(id);
-      setView("map");
-      setZoom(1);
-      setSelected(null);
-      setMessage(`Section ${n} added`);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Unable to add section");
-    }
-  }
-
-  async function upload(file: File) {
-    if (!plan) return;
-    try {
-      const f = new FormData();
-      f.append("file", file);
-      f.append("planType", plan.id);
-      f.append("kind", view === "map" ? "master-plan" : "drone");
-      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/assets`, { method: "POST", body: f });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Upload failed");
-      setPlans(v => v.map(p => p.id === plan.id ? { ...p, ...(view === "map" ? { masterPlanUrl: d.savedValue } : { droneUrl: d.savedValue }) } : p));
-      setMessage(`${view} uploaded`);
-    } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Upload failed");
-    }
-  }
-
-  function importLots(file: File) {
-    const r = new FileReader();
-    r.onload = () => {
-      try {
-        const data = JSON.parse(String(r.result));
-        const rows = Array.isArray(data) ? data : [];
-        const imported = rows.map((x: any, i: number) => ({ id: String(x.id || crypto.randomUUID()), number: String(x.number || i + 1), status: String(x.status || "available"), area: x.area ?? null, price: x.price ?? null, model: String(x.model || ""), owner: String(x.owner || ""), direction: String(x.direction || ""), points: String(x.points || ""), labelX: Number(x.labelX || 0), labelY: Number(x.labelY || 0), sectionId: planId }));
-        setLots(v => [...v.filter(l => (l.sectionId || "master_plan") !== planId), ...imported]);
-        setDirty(true);
-        setMessage(`${imported.length} lots imported`);
-      } catch { setMessage("Invalid lots.json"); }
-    };
-    r.readAsText(file);
-  }
-
-  function exportLots() {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(lots, null, 2)], { type: "application/json" }));
-    a.download = "lots.json";
-    a.click();
-  }
-
-  function canvasPoint(e: React.MouseEvent<SVGSVGElement>): Point {
-    const svg = e.currentTarget;
-    const rect = svg.getBoundingClientRect();
-    const vb = svg.viewBox.baseVal;
-    return { x: vb.x + ((e.clientX - rect.left) / rect.width) * vb.width, y: vb.y + ((e.clientY - rect.top) / rect.height) * vb.height };
-  }
-
-  function handleCanvasClick(e: React.MouseEvent<SVGSVGElement>) {
-    if (tool !== "draw") return;
-    e.preventDefault();
-    setDraft(v => [...v, canvasPoint(e)]);
-  }
-
-  function finishDraw() {
-    if (draft.length < 3 || !plan) {
-      setMessage("Add at least 3 points to create a lot");
-      return;
-    }
-    const nums = lots.map(l => Number(l.number)).filter(Number.isFinite);
-    const n = String((nums.length ? Math.max(...nums) : 0) + 1);
-    const c = draft.reduce((a, p) => ({ x: a.x + p.x / draft.length, y: a.y + p.y / draft.length }), { x: 0, y: 0 });
-    const lot: Lot = { id: crypto.randomUUID(), number: n, status: "available", area: null, price: null, model: "", owner: "", direction: "", points: pointString(draft), labelX: c.x, labelY: c.y, sectionId: plan.id };
-    setLots(v => [...v, lot]);
-    setSelected(lot.id);
-    setDraft([]);
-    setTool("select");
-    setDirty(true);
-    setMessage(`Lot ${n} created`);
-  }
-
-  function updateSelected(field: keyof Lot, value: string) {
-    if (!selected) return;
-    setLots(v => v.map(l => l.id === selected ? { ...l, [field]: value } : l));
-    setDirty(true);
-  }
-
-  function deleteSelected() {
-    if (!selected) return;
-    const n = selectedLot?.number;
-    setLots(v => v.filter(l => l.id !== selected));
-    setSelected(null);
-    setDirty(true);
-    setMessage(`Lot ${n || ""} deleted`);
-  }
-
-  function startAddLot() {
-    setDraft([]);
-    setSelected(null);
-    setTool("draw");
-    setMessage("Click 3 or more points around the lot, then click Finish lot");
-  }
-
-  return <div className={styles.editor}>
-    <header className={styles.header}>
-      <div><div className={styles.eyebrow}>LANDGRID / MAP AND MANAGE</div><h1>Lot Editor</h1><span>{plan?.name || "Master"}</span></div>
-      <div className={styles.actions}><button type="button" onClick={() => jsonRef.current?.click()}><FolderOpen size={16}/> Import lots</button><button type="button" onClick={exportLots}><Download size={16}/> Export lots</button><button type="button" className={styles.primary} onClick={save}><Save size={16}/> Save{dirty ? " *" : ""}</button></div>
-    </header>
-
-    <main className={styles.body}>
-      <aside className={styles.sidebar}>
-        <div className={styles.sideTop}><div><b>Map & Manage</b><small>{plan?.name || "Master Plan"}</small></div></div>
-        <div style={{ padding: 12, display: "grid", gap: 8 }}>
-          <button type="button" className={styles.primary} onClick={addSection}><Plus size={16}/> Add section</button>
-          <button type="button" className={styles.primary} onClick={startAddLot}><Plus size={16}/> Add lot</button>
-        </div>
-        <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, opacity: .65 }}>PLANS</div>
-        <div className={styles.lotList}>{plans.map(p => <button type="button" key={p.id} className={`${styles.lotCard} ${plan?.id === p.id ? styles.selected : ""}`} onClick={() => { setPlanId(p.id); setSelected(null); setDraft([]); setTool("select"); setZoom(1); }}><span className={styles.lotNumber}>{p.id === "master_plan" ? "M" : p.id.replace("section_", "S")}</span><span><b>{p.name}</b><small>{lots.filter(l => (l.sectionId || "master_plan") === p.id).length} lots</small></span></button>)}</div>
-        <div style={{ padding: "8px 12px", fontSize: 12, fontWeight: 700, opacity: .65 }}>LOTS</div>
-        <div className={styles.lotList}>{visible.map(l => <button type="button" key={l.id} className={`${styles.lotCard} ${selected === l.id ? styles.selected : ""}`} onClick={() => { setSelected(l.id); setTool("select"); }}><span className={styles.lotNumber}>{l.number}</span><span><b>Lot {l.number}</b><small>{l.status}{l.owner ? ` · ${l.owner}` : ""}</small></span></button>)}{!visible.length && <div className={styles.empty}>No lots yet.</div>}</div>
-      </aside>
-
-      <section className={styles.stage}>
-        <div className={styles.toolbar}>
-          <button type="button" className={tool === "select" ? styles.active : ""} onClick={() => setTool("select")}><MousePointer2 size={17}/></button>
-          <button type="button" className={tool === "pan" ? styles.active : ""} onClick={() => setTool("pan")}><Move size={17}/></button>
-          <button type="button" className={tool === "draw" ? styles.active : ""} onClick={startAddLot}><Grid2X2 size={17}/></button>
-          {tool === "draw" && <><button type="button" onClick={finishDraw}>Finish lot</button><button type="button" onClick={() => { setDraft([]); setTool("select"); }}>Cancel</button></>}
-          <span className={styles.separator}/>
-          <button type="button" onClick={() => setZoom(z => Math.min(8, +(z + .25).toFixed(2)))}><Plus size={17}/></button><strong>{Math.round(zoom * 100)}%</strong><button type="button" onClick={() => setZoom(z => Math.max(.25, +(z - .25).toFixed(2)))}><Minus size={17}/></button><button type="button" onClick={() => setZoom(1)}>Fit</button>
-          <span className={styles.separator}/><button type="button" className={view === "map" ? styles.active : ""} onClick={() => setView("map")}>Map</button><button type="button" className={view === "drone" ? styles.active : ""} onClick={() => setView("drone")}>Drone</button><button type="button" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload</button><button type="button" onClick={() => setShowImage(v => !v)}>{showImage ? <EyeOff size={16}/> : <Eye size={16}/>} {showImage ? "Hide image" : "Show image"}</button>
-          <span className={styles.spacer}/><span className={styles.hint}>{message || "Select a lot to edit"}</span>
-        </div>
-        <input ref={fileRef} hidden type="file" accept=".svg,.png,.jpg,.jpeg,.webp" onChange={e => e.target.files?.[0] && upload(e.target.files[0])}/><input ref={jsonRef} hidden type="file" accept=".json,application/json" onChange={e => e.target.files?.[0] && importLots(e.target.files[0])}/>
-        <div className={styles.canvasWrap}><div className={styles.canvas}>
-          <svg viewBox={viewBox} preserveAspectRatio="none" onClick={handleCanvasClick} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", cursor: tool === "draw" ? "crosshair" : "default" }}>
-            {assetUrl && showImage && <image href={assetUrl} x={b.minX - 100} y={b.minY - 100} width={baseWidth} height={baseHeight} preserveAspectRatio="none" pointerEvents="none"/>}
-            {visible.map(l => <g key={l.id} onClick={e => { e.stopPropagation(); setSelected(l.id); setTool("select"); }}><polygon points={l.points} fill={selected === l.id ? "rgba(37,99,235,.35)" : "rgba(37,99,235,.08)"} stroke={selected === l.id ? "#2457d6" : "#fff"} strokeWidth={selected === l.id ? 4 : 2}/><text x={l.labelX} y={l.labelY} textAnchor="middle" dominantBaseline="middle" fontSize="24" fontWeight="800" fill="#172033" paintOrder="stroke" stroke="#fff" strokeWidth="5">{l.number}</text></g>)}
-            {draft.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="7" fill="#2457d6"/>)}
-            {draft.length > 1 && <polyline points={draft.map(p => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#2457d6" strokeWidth="4"/>}
-          </svg>
-          {!assetUrl && <div className={styles.empty}>Upload a {view} for this plan.</div>}
-        </div></div>
-      </section>
-
-      {selectedLot && <aside className={styles.sidebar}><div className={styles.sideTop}><div><b>Lot {selectedLot.number}</b><small>Edit lot details</small></div><button type="button" onClick={() => setSelected(null)}><X size={16}/></button></div><div style={{ padding: 16, display: "grid", gap: 12 }}><label>Lot number<input value={selectedLot.number} onChange={e => updateSelected("number", e.target.value)}/></label><label>Status<select value={selectedLot.status} onChange={e => updateSelected("status", e.target.value)}><option value="available">Available</option><option value="reserved">Reserved</option><option value="sold">Sold</option><option value="hold">Hold</option></select></label><label>Owner<input value={selectedLot.owner} onChange={e => updateSelected("owner", e.target.value)}/></label><label>Price<input type="number" value={selectedLot.price ?? ""} onChange={e => updateSelected("price", e.target.value)}/></label><label>Area<input type="number" value={selectedLot.area ?? ""} onChange={e => updateSelected("area", e.target.value)}/></label><label>Model<input value={selectedLot.model} onChange={e => updateSelected("model", e.target.value)}/></label><label>Direction<input value={selectedLot.direction} onChange={e => updateSelected("direction", e.target.value)}/></label><button type="button" onClick={deleteSelected}><Trash2 size={16}/> Delete lot</button></div></aside>}
-    </main>
-  </div>;
+ return <div className={styles.editor}>
+  <header className={styles.header}><div><div className={styles.eyebrow}>LANDGRID / MAP AND MANAGE</div><h1>Lot Editor</h1><span>{plan?.name||"Master Plan"}</span></div><div className={styles.actions}><button type="button" onClick={()=>jsonRef.current?.click()}><FolderOpen size={16}/> Import lots</button><button type="button" onClick={exportLots}><Download size={16}/> Export lots</button><button type="button" className={styles.primary} disabled={busy} onClick={save}><Save size={16}/> {busy?"Working…":"Save"}{dirty?" *":""}</button></div></header>
+  <main className={styles.body}>
+   <aside className={styles.sidebar}>
+    <div className={styles.sideTop}><div><b>Map & Manage</b><small>{plan?.name||"Master Plan"}</small></div></div>
+    <div style={{padding:12,display:"grid",gap:8}}><button type="button" className={styles.primary} disabled={busy} onClick={addSection}><Plus size={16}/> Add section</button><button type="button" className={styles.primary} disabled={busy||!plan} onClick={startAddLot}><Plus size={16}/> Add lot</button></div>
+    <div style={{padding:"8px 12px",fontSize:12,fontWeight:700,opacity:.65}}>PLANS</div>
+    <div className={styles.lotList}>{plans.map(p=><div key={p.id} style={{display:"flex",alignItems:"stretch",gap:4}}><button type="button" style={{flex:1,textAlign:"left"}} className={`${styles.lotCard} ${plan?.id===p.id?styles.selected:""}`} onClick={()=>selectPlan(p.id)}><span className={styles.lotNumber}>{p.id==="master_plan"?"M":p.id.replace("section_","S")}</span><span><b>{p.name}</b><small>{lots.filter(l=>(l.sectionId||"master_plan")===p.id).length} lots</small></span></button>{p.id!=="master_plan"&&<button type="button" title={`Delete ${p.name}`} disabled={busy} onClick={()=>deleteSection(p)} style={{width:42}}><Trash2 size={15}/></button>}</div>)}</div>
+    <div style={{padding:"12px 12px 8px",fontSize:12,fontWeight:700,opacity:.65}}>LOTS IN {plan?.name?.toUpperCase()||"MASTER PLAN"}</div>
+    <div className={styles.lotList}>{visible.map(l=><button type="button" key={l.id} className={`${styles.lotCard} ${selected===l.id?styles.selected:""}`} onClick={()=>{setSelected(l.id);setTool("select");}}><span className={styles.lotNumber}>{l.number}</span><span><b>Lot {l.number}</b><small>{l.status}{l.owner?` · ${l.owner}`:""}</small></span></button>)}{!visible.length&&<div className={styles.empty}>No lots yet.<br/>Use <b>Add lot</b> to draw one.</div>}</div>
+   </aside>
+   <section className={styles.stage}>
+    <div className={styles.toolbar}><button type="button" className={tool==="select"?styles.active:""} onClick={()=>setTool("select")}><MousePointer2 size={17}/></button><button type="button" className={tool==="pan"?styles.active:""} onClick={()=>setTool("pan")}><Move size={17}/></button><button type="button" className={tool==="draw"?styles.active:""} onClick={startAddLot}><Grid2X2 size={17}/></button>{tool==="draw"&&<><button type="button" onClick={finishDraw}>Finish lot</button><button type="button" onClick={()=>{setDraft([]);setTool("select");}}>Cancel</button></>}<span className={styles.separator}/><button type="button" onClick={()=>setZoom(z=>Math.min(8,Number((z+.25).toFixed(2))))}><Plus size={17}/></button><strong>{Math.round(zoom*100)}%</strong><button type="button" onClick={()=>setZoom(z=>Math.max(.25,Number((z-.25).toFixed(2))))}><Minus size={17}/></button><button type="button" onClick={()=>setZoom(1)}>Fit</button><span className={styles.separator}/><button type="button" className={view==="map"?styles.active:""} onClick={()=>setView("map")}>Map</button><button type="button" className={view==="drone"?styles.active:""} onClick={()=>setView("drone")}>Drone</button><button type="button" onClick={()=>fileRef.current?.click()}><Upload size={16}/> Upload</button><button type="button" onClick={()=>setShowImage(v=>!v)}>{showImage?<EyeOff size={16}/>:<Eye size={16}/>} {showImage?"Hide image":"Show image"}</button><span className={styles.spacer}/><span className={styles.hint}>{message||"Select a lot to edit"}</span></div>
+    <input ref={fileRef} hidden type="file" accept=".svg,.png,.jpg,.jpeg,.webp" onChange={e=>e.target.files?.[0]&&upload(e.target.files[0])}/><input ref={jsonRef} hidden type="file" accept=".json,application/json" onChange={e=>e.target.files?.[0]&&importLots(e.target.files[0])}/>
+    <div className={styles.canvasWrap}><div className={styles.canvas}>
+      <svg viewBox={viewBox} preserveAspectRatio="none" onClick={handleCanvasClick} style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:tool==="draw"?"crosshair":"default"}}>
+       {assetUrl&&showImage&&<image href={assetUrl} x={imageBox.x} y={imageBox.y} width={imageBox.width} height={imageBox.height} preserveAspectRatio="none" pointerEvents="none"/>}
+       {visible.map(l=><g key={l.id} onClick={e=>{e.stopPropagation();setSelected(l.id);setTool("select")}}><polygon points={l.points} fill={selected===l.id?"rgba(37,99,235,.35)":"rgba(37,99,235,.08)"} stroke={selected===l.id?"#2457d6":"#fff"} strokeWidth={selected===l.id?4:2}/><text x={l.labelX} y={l.labelY} textAnchor="middle" dominantBaseline="middle" fontSize="24" fontWeight="800" fill="#172033" paintOrder="stroke" stroke="#fff" strokeWidth="5">{l.number}</text></g>)}
+       {draft.length>1&&<polyline points={draft.map(p=>`${p.x},${p.y}`).join(" ")} fill="none" stroke="#2457d6" strokeWidth="4"/>}{draft.map((p,i)=><circle key={i} cx={p.x} cy={p.y} r="7" fill="#2457d6"/>)}</svg>
+      {!assetUrl&&<div className={styles.empty}>Upload a {view} for this plan.</div>}
+     </div></div>
+   </section>
+   {selectedLot&&<aside className={styles.sidebar}><div className={styles.sideTop}><div><b>Lot {selectedLot.number}</b><small>Edit lot details</small></div><button type="button" onClick={()=>setSelected(null)}><X size={16}/></button></div><div style={{padding:16,display:"grid",gap:12}}><label>Lot number<input value={selectedLot.number} onChange={e=>updateSelected("number",e.target.value)}/></label><label>Status<select value={selectedLot.status} onChange={e=>updateSelected("status",e.target.value)}><option value="available">Available</option><option value="reserved">Reserved</option><option value="sold">Sold</option><option value="hold">Hold</option></select></label><label>Owner<input value={selectedLot.owner} onChange={e=>updateSelected("owner",e.target.value)}/></label><label>Price<input type="number" value={selectedLot.price??""} onChange={e=>updateSelected("price",e.target.value)}/></label><label>Area<input type="number" value={selectedLot.area??""} onChange={e=>updateSelected("area",e.target.value)}/></label><label>Model<input value={selectedLot.model} onChange={e=>updateSelected("model",e.target.value)}/></label><label>Direction<input value={selectedLot.direction} onChange={e=>updateSelected("direction",e.target.value)}/></label><button type="button" onClick={deleteSelected}><Trash2 size={16}/> Delete lot</button></div></aside>}
+  </main>
+ </div>;
 }
