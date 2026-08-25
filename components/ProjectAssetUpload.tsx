@@ -2,13 +2,7 @@
 
 import { useRef, useState } from 'react';
 
-type Props = {
-  slug: string;
-  kind: 'master-plan' | 'drone' | 'media';
-  accept: string;
-  currentUrl?: string | null;
-  planType?: string;
-};
+type Props = { slug: string; kind: 'master-plan' | 'drone' | 'media'; accept: string; currentUrl?: string | null; planType?: string };
 
 export default function ProjectAssetUpload({ slug, kind, accept, currentUrl, planType = 'master_plan' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -17,39 +11,24 @@ export default function ProjectAssetUpload({ slug, kind, accept, currentUrl, pla
   const [uploadedUrl, setUploadedUrl] = useState(currentUrl || '');
 
   async function upload(file: File) {
-    setUploading(true);
-    setError('');
+    setUploading(true); setError('');
     try {
       const form = new FormData();
-      form.append('file', file);
-      form.append('kind', kind);
-      form.append('planType', planType);
-      const response = await fetch(`/api/projects/${encodeURIComponent(slug)}/assets`, {
-        method: 'POST',
-        body: form,
-        credentials: 'same-origin',
-      });
+      form.append('file', file); form.append('kind', kind); form.append('planType', planType);
+      const response = await fetch(`/api/projects/${encodeURIComponent(slug)}/assets`, { method: 'POST', body: form, credentials: 'same-origin' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Upload failed');
-      setUploadedUrl(data.url || '');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = '';
-    }
+      setUploadedUrl(data.savedValue || '');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Upload failed'); }
+    finally { setUploading(false); if (inputRef.current) inputRef.current.value = ''; }
   }
 
-  return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button type="button" className="button secondary" onClick={() => inputRef.current?.click()} disabled={uploading}>
-          {uploading ? 'Uploading…' : uploadedUrl ? 'Replace file' : 'Upload file'}
-        </button>
-        {uploadedUrl && <span style={{ fontSize: 13, color: 'var(--muted, #6b7280)' }}>File uploaded</span>}
-      </div>
-      <input ref={inputRef} type="file" accept={accept} hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
-      {error && <small style={{ color: '#b91c1c' }}>{error}</small>}
+  return <div style={{ display: 'grid', gap: 8 }}>
+    <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <button type="button" className="button secondary" onClick={() => inputRef.current?.click()} disabled={uploading}>{uploading ? 'Uploading…' : uploadedUrl ? 'Replace file' : 'Upload file'}</button>
+      {uploadedUrl && <span style={{ fontSize: 13, color: 'var(--muted, #6b7280)' }}>File uploaded</span>}
     </div>
-  );
+    <input ref={inputRef} type="file" accept={accept} hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} />
+    {error && <small style={{ color: '#b91c1c' }}>{error}</small>}
+  </div>;
 }
