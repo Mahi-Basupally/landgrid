@@ -4,12 +4,13 @@ import { useRef, useState } from 'react';
 
 type Props = {
   slug: string;
-  kind: 'master-plan' | 'drone' | 'media' | 'section';
+  kind: 'master-plan' | 'drone' | 'media';
   accept: string;
   currentUrl?: string | null;
+  planType?: string;
 };
 
-export default function ProjectAssetUpload({ slug, kind, accept, currentUrl }: Props) {
+export default function ProjectAssetUpload({ slug, kind, accept, currentUrl, planType = 'master_plan' }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
@@ -22,6 +23,7 @@ export default function ProjectAssetUpload({ slug, kind, accept, currentUrl }: P
       const form = new FormData();
       form.append('file', file);
       form.append('kind', kind);
+      form.append('planType', planType);
       const response = await fetch(`/api/projects/${encodeURIComponent(slug)}/assets`, {
         method: 'POST',
         body: form,
@@ -30,7 +32,6 @@ export default function ProjectAssetUpload({ slug, kind, accept, currentUrl }: P
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Upload failed');
       setUploadedUrl(data.url || '');
-      // The upload API persists master-plan and drone URLs directly in Supabase.
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Upload failed');
     } finally {

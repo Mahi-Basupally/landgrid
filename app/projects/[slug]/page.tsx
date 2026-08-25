@@ -12,7 +12,7 @@ export default async function PublicProjectPage({ params }: Props) {
   const { slug } = await params;
   const { data: project, error } = await supabaseAdmin()
     .from('projects')
-    .select('id,slug,name,address,description,google_location_url,site_plan_url,drone_url,created_at')
+    .select('id,slug,name,address,description,google_location_url,created_at')
     .eq('slug', slug)
     .maybeSingle();
 
@@ -38,7 +38,7 @@ export default async function PublicProjectPage({ params }: Props) {
         </div>
       </section>
       <section style={{ marginTop: 24 }}>
-        <ProjectPlanViewer projectName={project.name} projectSlug={project.slug} sitePlanUrl={project.site_plan_url} droneUrl={project.drone_url} />
+        <ProjectPlanViewer projectName={project.name} projectSlug={project.slug} />
       </section>
     </main>
   );
