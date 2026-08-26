@@ -9,7 +9,7 @@ async function currentUser() {
 
 async function projectId(slug: string) {
   const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
-  const { data, error } = await supabaseAdmin().from('projects').select('id,slug,created_by').eq('slug', slug).single();
+  const { data, error } = await supabaseAdmin().from('projects').select('id,slug,created_by').eq('slug', slug).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -20,6 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const user = await currentUser();
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     const project = await projectId(slug);
+    if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     const role = await getMembership(user.id, slug);
     if (role !== 'admin' && project.created_by !== user.id) return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
 
@@ -51,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     }
 
     const { supabaseAdmin } = await import('@/lib/supabaseAdmin');
-    const { data: project, error: projectError } = await supabaseAdmin().from('projects').select('id').eq('slug', slug).single();
+    const { data: project, error: projectError } = await supabaseAdmin().from('projects').select('id').eq('slug', slug).maybeSingle();
     if (projectError || !project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
 
     const { data, error } = await supabaseAdmin().from('project_members').insert({ project_id: project.id, user_id: user.id, role: role as Role }).select('project_id,user_id,role').single();
