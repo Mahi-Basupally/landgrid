@@ -14,22 +14,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const user = await currentUser();
     if (!user) return NextResponse.redirect(new URL('/login', req.url));
 
-    const role = await getMembership(user.id, slug);
-    if (role !== 'admin') return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
+    const db = supabaseAdmin();
+    const { data: project, error: projectLookupError } = await db.from('projects').select('id,slug,created_by').eq('slug', slug).maybeSingle();
+    if (projectLookupError) throw projectLookupError;
+    if (!project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+
+    const role = await getMembership(user.id, project.slug);
+    if (role !== 'admin' && project.created_by !== user.id) return NextResponse.json({ error: 'Admin access required.' }, { status: 403 });
 
     const form = await req.formData();
     const name = String(form.get('name') || '').trim();
     const address = String(form.get('address') || '').trim();
     if (!name || !address) return NextResponse.json({ error: 'Project name and address are required.' }, { status: 400 });
 
-    const { error } = await supabaseAdmin().from('projects').update({
+    const { error } = await db.from('projects').update({
       name,
       address,
       description: String(form.get('description') || '').trim() || null,
       google_location_url: String(form.get('googleLocationUrl') || '').trim() || null,
-      site_plan_url: String(form.get('sitePlanUrl') || '').trim() || null,
-      drone_url: String(form.get('droneUrl') || '').trim() || null,
-    }).eq('slug', slug);
+    }).eq('id', project.id);
 
     if (error) throw error;
     return NextResponse.redirect(new URL(`/projects/${slug}/settings?saved=1`, req.url));
