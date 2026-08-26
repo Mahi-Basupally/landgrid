@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Eye, EyeOff, Minus, Plus, Save, Trash2, Upload, X, UserPlus } from "lucide-react";
+import { Copy, Eye, EyeOff, FileJson, Minus, Plus, Save, Trash2, Upload, X, UserPlus } from "lucide-react";
 
 type Point = { x: number; y: number };
 type Layer = { visible: boolean; opacity: number; x: number; y: number; width: number; height: number };
@@ -31,7 +31,7 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
   const [planId, setPlanId] = useState("master_plan"), [selected, setSelected] = useState<string | null>(null), [selectedSection, setSelectedSection] = useState<string | null>(null), [shapeMode, setShapeMode] = useState<ShapeMode>("polygon");
   const [layers, setLayers] = useState<Layers>(defaultLayers()), [zoom, setZoom] = useState(1), [pan, setPan] = useState<Point>({ x: 0, y: 0 }), [drag, setDrag] = useState<Drag | null>(null), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<{ kind: "plot" | "section"; id: string; label: string } | null>(null), [uploading, setUploading] = useState<"map" | "drone" | null>(null), [ownerName, setOwnerName] = useState(""), [ownerEmail, setOwnerEmail] = useState(""), [ownerPhone, setOwnerPhone] = useState(""), [ownersOpen, setOwnersOpen] = useState(false);
-  const svgRef = useRef<SVGSVGElement | null>(null), mapInput = useRef<HTMLInputElement | null>(null), droneInput = useRef<HTMLInputElement | null>(null), loaded = useRef(false), saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null), mapInput = useRef<HTMLInputElement | null>(null), droneInput = useRef<HTMLInputElement | null>(null), importInput = useRef<HTMLInputElement | null>(null), loaded = useRef(false), saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const master = plans.find(p => p.id === "master_plan") || plans[0], section = plans.find(p => p.id === selectedSection) || null, selectedPlot = plots.find(p => p.id === selected) || null;
   const sectionList = useMemo(() => plans.filter(p => p.id !== "master_plan"), [plans]);
@@ -113,6 +113,44 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
   function move(e: React.PointerEvent<SVGSVGElement>) { if (!drag) return; if (drag.kind === "pan") { const r = svgRef.current?.getBoundingClientRect(); if (!r) return; setPan({ x: drag.panStart!.x - (e.clientX - drag.start.x) * viewW / r.width, y: drag.panStart!.y - (e.clientY - drag.start.y) * viewH / r.height }); setDirty(true); return; } const n = point(e), dx = n.x - drag.start.x, dy = n.y - drag.start.y; let q = drag.points!; if (drag.kind === "move") q = q.map(p => ({ x: p.x + dx, y: p.y + dy })); else if (drag.kind === "edge") q = moveEdge(q, drag.edge!, dx, dy); else if (drag.kind === "point") q = q.map((p, i) => i === drag.point ? { x: p.x + dx, y: p.y + dy } : p); else return; if (drag.section) { const s = stringify(q); setSections(v => ({ ...v, [drag.id]: s })); setPlans(v => v.map(p => p.id === drag.id ? { ...p, points: s } : p)); } else { const c = center(q); setPlots(v => v.map(p => p.id === drag.id ? { ...p, points: stringify(q), labelX: c.x, labelY: c.y } : p)); } setDirty(true); }
   async function upload(kind: "map" | "drone", file: File) { setUploading(kind); try { const form = new FormData(); form.append("file", file); form.append("kind", kind === "map" ? "master-plan" : "drone"); form.append("planType", "master_plan"); const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/assets`, { method: "POST", body: form }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Upload failed"); setPlans(v => v.map(p => p.id === "master_plan" ? { ...p, ...(kind === "map" ? { masterPlanUrl: d.savedValue } : { droneUrl: d.savedValue }) } : p)); setDirty(true); setMessage(`${kind} uploaded`); } catch (e) { setMessage(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(null); } }
   function resetView() { setZoom(1); setPan({ x: 0, y: 0 }); setDirty(true); }
+  function importPlots(file: File) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const raw = JSON.parse(String(e.target?.result || "[]"));
+        if (!Array.isArray(raw) || !raw.length) { setMessage("No plots found in file"); return; }
+        const imported: Plot[] = raw.map((item: any) => {
+          const pts = parse(String(item.points || ""));
+          const q = pts.length >= 3 ? pts : normalize([]);
+          const c = center(q);
+          return {
+            id: item.id && /^[0-9a-f-]{36}$/i.test(item.id) ? item.id : crypto.randomUUID(),
+            number: String(item.number || ""),
+            status: item.status || "available",
+            owner: item.owner || "",
+            ownerId: item.ownerId || null,
+            price: item.price ?? null,
+            area: item.area ?? null,
+            direction: item.direction || "",
+            model: item.model || "",
+            points: stringify(q),
+            labelX: Number(item.labelX) || c.x,
+            labelY: Number(item.labelY) || c.y,
+            sectionId: item.sectionId || null,
+          };
+        });
+        setPlots(v => {
+          const existingIds = new Set(v.map(p => p.id));
+          const newPlots = imported.filter(p => !existingIds.has(p.id));
+          return [...v, ...newPlots];
+        });
+        setDirty(true);
+        setMessage(`Imported ${imported.length} plot${imported.length !== 1 ? "s" : ""}`);
+        if (importInput.current) importInput.current.value = "";
+      } catch { setMessage("Invalid JSON file"); }
+    };
+    reader.readAsText(file);
+  }
   function layerChange(kind: "map" | "drone", patch: Partial<Layer>) { setLayers(v => ({ ...v, [kind]: { ...v[kind], ...patch } })); setDirty(true); }
   function removePlot() { if (!selectedPlot) return; setPlots(v => v.filter(p => p.id !== selectedPlot.id)); setSelected(null); setDirty(true); setMessage("Plot deleted"); }
   async function addOwner() { const name = ownerName.trim(); if (!name) return; try { const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/owners`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email: ownerEmail, phone: ownerPhone }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to add owner"); setOwners(v => [...v, d.owner].sort((a: Owner, b: Owner) => a.name.localeCompare(b.name))); setOwnerName(""); setOwnerEmail(""); setOwnerPhone(""); setMessage("Owner added"); } catch (e) { setMessage(e instanceof Error ? e.message : "Unable to add owner"); } }
@@ -126,7 +164,7 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
     <div style={{ display: "grid", gridTemplateColumns: "290px minmax(0,1fr) 330px", minHeight: 0 }}>
       <aside style={{ background: "#fff", borderRight: "1px solid #e2e8f0", padding: 12, overflow: "auto" }}>
         <button type="button" onClick={() => { setPlanId("master_plan"); deselect(); }} style={{ ...button, width: "100%", justifyContent: "flex-start", background: planId === "master_plan" ? "#eef2ff" : "#fff", borderColor: planId === "master_plan" ? "#c7d2fe" : "#e2e8f0" }}>▦ <span>Master Plan</span></button>
-        <div style={{ margin: "18px 0 7px", fontSize: 10, letterSpacing: 1, fontWeight: 900, color: "#7b8798" }}>PLOTS</div><button type="button" onClick={addPlot} style={{ ...button, width: "100%", background: "#172554", color: "#fff", borderColor: "#172554" }}><Plus size={14} /> Add Plot</button><select aria-label="Select a plot" value={selected || ""} onChange={e => choosePlot(e.target.value)} style={{ ...input, marginTop: 7 }}><option value="">Select a plot…</option>{plots.slice().sort((a, b) => Number(a.number) - Number(b.number)).map(p => <option key={p.id} value={p.id}>Plot {p.number} {p.sectionId ? `— ${plans.find(s => s.id === p.sectionId)?.name || "Section"}` : "— Master Plan"}</option>)}</select>
+        <div style={{ margin: "18px 0 7px", fontSize: 10, letterSpacing: 1, fontWeight: 900, color: "#7b8798" }}>PLOTS</div><div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 6 }}><button type="button" onClick={addPlot} style={{ ...button, background: "#172554", color: "#fff", borderColor: "#172554" }}><Plus size={14} /> Add Plot</button><button type="button" title="Import plots from JSON" onClick={() => importInput.current?.click()} style={{ ...button, padding: "8px 10px" }}><FileJson size={14} /></button></div><input ref={importInput} hidden type="file" accept=".json,application/json" onChange={e => { const f = e.target.files?.[0]; if (f) importPlots(f); }} /><select aria-label="Select a plot" value={selected || ""} onChange={e => choosePlot(e.target.value)} style={{ ...input, marginTop: 7 }}><option value="">Select a plot…</option>{plots.slice().sort((a, b) => Number(a.number) - Number(b.number)).map(p => <option key={p.id} value={p.id}>Plot {p.number} {p.sectionId ? `— ${plans.find(s => s.id === p.sectionId)?.name || "Section"}` : "— Master Plan"}</option>)}</select>
         <div style={{ margin: "18px 0 7px", fontSize: 10, letterSpacing: 1, fontWeight: 900, color: "#7b8798" }}>OWNERS</div><button type="button" onClick={() => setOwnersOpen(v => !v)} style={{ ...button, width: "100%", justifyContent: "space-between" }}><span><UserPlus size={14} style={{ verticalAlign: "-2px", marginRight: 6 }} />Manage Owners</span><span>{owners.length}</span></button>{ownersOpen && <div style={{ ...card, marginTop: 7 }}><input placeholder="Owner name" value={ownerName} onChange={e => setOwnerName(e.target.value)} style={{ ...input, marginBottom: 6 }} /><input placeholder="Email (optional)" value={ownerEmail} onChange={e => setOwnerEmail(e.target.value)} style={{ ...input, marginBottom: 6 }} /><input placeholder="Phone (optional)" value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} style={{ ...input, marginBottom: 7 }} /><button type="button" onClick={() => void addOwner()} style={{ ...button, width: "100%", background: "#172554", color: "#fff", borderColor: "#172554" }}><Plus size={13} /> Add owner</button><div style={{ marginTop: 9, display: "grid", gap: 5 }}>{owners.map(o => <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderTop: "1px solid #eef2f6" }}><div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 12, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.name}</div><div style={{ fontSize: 10, color: "#64748b" }}>{plots.filter(p => p.ownerId === o.id).length} plot(s)</div></div><button type="button" title="Remove owner" onClick={() => void deleteOwner(o.id)} style={{ ...button, padding: 5, color: "#b91c1c" }}><Trash2 size={12} /></button></div>)}</div></div>}
         <div style={{ margin: "18px 0 7px", fontSize: 10, letterSpacing: 1, fontWeight: 900, color: "#7b8798" }}>SECTIONS</div><button type="button" onClick={() => void addSection()} style={{ ...button, width: "100%" }}><Plus size={14} /> Add Section</button><div style={{ display: "grid", gap: 6, marginTop: 7 }}>{sectionList.map(s => { const v = visibility[s.id] || emptyVisibility(); return <div key={s.id} style={{ display: "flex", gap: 5 }}><button type="button" onClick={() => selectSection(s.id)} style={{ ...button, flex: 1, justifyContent: "flex-start", background: selectedSection === s.id ? "#eef2ff" : "#fff", borderColor: selectedSection === s.id ? "#c7d2fe" : "#e2e8f0", opacity: v.hidden ? .55 : 1 }}>{v.hidden ? <EyeOff size={13} /> : <Eye size={13} />}<span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span></button><button type="button" title="Hide/show section" onClick={() => toggleSectionVisibility(s.id, "hidden")} style={{ ...button, padding: 8 }}>{v.hidden ? <EyeOff size={13} /> : <Eye size={13} />}</button></div>; })}</div>
         <div style={{ margin: "18px 0 7px", fontSize: 10, letterSpacing: 1, fontWeight: 900, color: "#7b8798" }}>MAP / DRONE</div>{["map", "drone"].map(k => <div key={k} style={{ ...card, marginTop: 6 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, fontWeight: 800 }}><span>{k === "map" ? "Master plan" : "Drone image"}</span><button type="button" onClick={() => layerChange(k as "map" | "drone", { visible: !layers[k as "map" | "drone"].visible })} style={{ ...button, padding: 5 }}>{layers[k as "map" | "drone"].visible ? <Eye size={13} /> : <EyeOff size={13} />}</button></div><div style={{ display: "flex", gap: 7, alignItems: "center", marginTop: 8 }}><span style={{ fontSize: 10, color: "#64748b" }}>Opacity</span><input aria-label={`${k} opacity`} type="range" min="0" max="1" step=".05" value={layers[k as "map" | "drone"].opacity} onChange={e => layerChange(k as "map" | "drone", { opacity: Number(e.target.value) })} style={{ flex: 1 }} /></div><button type="button" style={{ ...button, width: "100%", marginTop: 8 }} onClick={() => (k === "map" ? mapInput.current?.click() : droneInput.current?.click())}><Upload size={13} /> {uploading === k ? "Uploading…" : `Upload ${k}`}</button></div>)}<input ref={mapInput} hidden type="file" accept="image/*,.svg" onChange={e => { const f = e.target.files?.[0]; if (f) void upload("map", f); e.currentTarget.value = ""; }} /><input ref={droneInput} hidden type="file" accept="image/*,.svg" onChange={e => { const f = e.target.files?.[0]; if (f) void upload("drone", f); e.currentTarget.value = ""; }} />
