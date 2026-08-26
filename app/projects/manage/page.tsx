@@ -10,7 +10,7 @@ const btn: React.CSSProperties = { border: "1px solid #dce3df", background: "whi
 
 function textLogo(name: string) {
   const words = name.trim().split(/\s+/).filter(Boolean);
-  return (words.length > 1 ? words.slice(0, 2).map(w => w[0]) : name.trim().slice(0, 2)).toUpperCase() || "LG";
+  return (words.length > 1 ? words.slice(0, 2).map(w => w[0]).join("") : name.trim().slice(0, 2)).toUpperCase() || "LG";
 }
 
 export default function ManageProjects() {
