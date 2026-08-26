@@ -1,4 +1,5 @@
 import './globals.css';
+import './settings-layout.css';
 import type { ReactNode } from 'react';
 import AppShell from '@/components/app-shell';
 
