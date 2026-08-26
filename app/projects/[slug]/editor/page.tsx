@@ -1,10 +1,6 @@
-import LotEditor from '@/components/lot-editor';
+import PlotEditor from '@/components/plot-editor-v2';
 
-export default async function ProjectEditorPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function ProjectEditorPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  return <LotEditor projectSlug={slug} />;
+  return <PlotEditor projectSlug={slug} />;
 }
