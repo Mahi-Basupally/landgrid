@@ -34,7 +34,12 @@ export default function LotEditor({ projectSlug }: { projectSlug: string }) {
 
   const master = plans.find(p => p.id === "master_plan") || plans[0], section = plans.find(p => p.id === selectedSection) || null, selectedPlot = plots.find(p => p.id === selected) || null;
   const sectionList = useMemo(() => plans.filter(p => p.id !== "master_plan"), [plans]);
-  const visiblePlots = useMemo(() => planId === "master_plan" ? plots.filter(p => !p.sectionId) : visibility[planId]?.plotsHidden ? [] : plots.filter(p => p.sectionId === planId), [plots, planId, visibility]);
+  const visiblePlots = useMemo(() => {
+    if (planId === "master_plan") {
+      return plots.filter(p => !p.sectionId || !visibility[p.sectionId]?.plotsHidden);
+    }
+    return visibility[planId]?.plotsHidden ? [] : plots.filter(p => p.sectionId === planId);
+  }, [plots, planId, visibility]);
   const viewW = W / zoom, viewH = H / zoom, viewBox = `${(W - viewW) / 2 + pan.x} ${(H - viewH) / 2 + pan.y} ${viewW} ${viewH}`;
 
   const point = (e: React.PointerEvent<SVGElement>): Point => { const svg = svgRef.current; if (!svg) return { x: 0, y: 0 }; const r = svg.getBoundingClientRect(), v = svg.viewBox.baseVal; return { x: v.x + ((e.clientX - r.left) / r.width) * v.width, y: v.y + ((e.clientY - r.top) / r.height) * v.height }; };
@@ -118,8 +123,7 @@ export default function LotEditor({ projectSlug }: { projectSlug: string }) {
     if (drag.kind === "move") q = q.map(p => ({ x: p.x + dx, y: p.y + dy })); else if (drag.kind === "edge") q = moveEdge(q, drag.edge!, dx, dy); else return;
     if (drag.section) { const s = stringify(q); setSections(v => ({ ...v, [drag.id]: s })); setPlans(v => v.map(p => p.id === drag.id ? { ...p, points: s } : p)); } else { const c = center(q); setPlots(v => v.map(p => p.id === drag.id ? { ...p, points: stringify(q), labelX: c.x, labelY: c.y } : p)); } setDirty(true);
   }
-  async function upload(kind: "map" | "drone", file: File) {
-    setUploading(kind); try { const form = new FormData(); form.append("file", file); form.append("kind", kind === "map" ? "master-plan" : "drone"); form.append("planType", "master_plan"); const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/assets`, { method: "POST", body: form }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Upload failed"); setPlans(v => v.map(p => p.id === "master_plan" ? { ...p, ...(kind === "map" ? { masterPlanUrl: d.savedValue } : { droneUrl: d.savedValue }) } : p)); setDirty(true); setMessage(`${kind} uploaded`); } catch (e) { setMessage(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(null); }
+  async function upload(kind: "map" | "drone", file: File) { setUploading(kind); try { const form = new FormData(); form.append("file", file); form.append("kind", kind === "map" ? "master-plan" : "drone"); form.append("planType", "master_plan"); const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/assets`, { method: "POST", body: form }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Upload failed"); setPlans(v => v.map(p => p.id === "master_plan" ? { ...p, ...(kind === "map" ? { masterPlanUrl: d.savedValue } : { droneUrl: d.savedValue }) } : p)); setDirty(true); setMessage(`${kind} uploaded`); } catch (e) { setMessage(e instanceof Error ? e.message : "Upload failed"); } finally { setUploading(null); }
   }
   function resetView() { setZoom(1); setPan({ x: 0, y: 0 }); setDirty(true); }
   function layerChange(kind: "map" | "drone", patch: Partial<Layer>) { setLayers(v => ({ ...v, [kind]: { ...v[kind], ...patch } })); setDirty(true); }
