@@ -19,7 +19,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <HeaderContext.Provider value={{ state: headerState, setState }}>
       <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         <AppHeader projectName={headerState.projectName} message={headerState.message} />
-        <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+        <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{children}</div>
       </div>
     </HeaderContext.Provider>
   );

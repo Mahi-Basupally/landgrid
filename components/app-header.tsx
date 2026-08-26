@@ -21,6 +21,7 @@ export default function AppHeader({ projectName, message = "" }: Props) {
   const isProjects = pathname === "/projects" || pathname === "/projects/manage";
   const isSettings = pathname.includes("/settings");
   const isEditor = pathname.includes("/editor");
+  const isView = !isEditor && !isSettings && !isProjects && Boolean(slug);
   const displayName = projectName || (slug ? prettySlug(slug) : "");
 
   async function logout() {
@@ -35,12 +36,12 @@ export default function AppHeader({ projectName, message = "" }: Props) {
           <span className="app-brand-mark">LG</span>
           <strong>LANDGRID</strong>
         </Link>
-        {(isEditor || isSettings) && displayName && (
+        {(isEditor || isSettings || isView) && displayName && (
           <>
             <span className="app-divider" />
             <span className="app-project-name">{displayName}</span>
             <span className="app-heading-separator">-</span>
-            <span className="app-page-heading">{isEditor ? "Map & Manage" : "Settings"}</span>
+            <span className="app-page-heading">{isEditor ? "Map & Manage" : isSettings ? "Settings" : "View"}</span>
             {isEditor && message && (
               <span className="app-message" title={message}>
                 <MessageSquare size={14} /> {message}
@@ -68,7 +69,12 @@ export default function AppHeader({ projectName, message = "" }: Props) {
             <ArrowLeft size={15} /> Back to Editor
           </Link>
         )}
-        {(isEditor || isSettings) && slug && (
+        {isView && (
+          <Link href="/projects" className="app-header-button app-back">
+            <ArrowLeft size={15} /> Back to Projects
+          </Link>
+        )}
+        {(isEditor || isSettings || isView) && slug && (
           <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings">
             <Settings size={16} />
           </Link>
