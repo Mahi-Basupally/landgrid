@@ -13,7 +13,7 @@ export default function CapeTownEditorAliasPage() {
         style={{
           position: "fixed",
           top: 14,
-          right: 18,
+          right: 86,
           zIndex: 100,
           width: 36,
           height: 36,
