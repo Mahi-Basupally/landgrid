@@ -2,31 +2,27 @@
 
 import Link from "next/link";
 import { ArrowLeft, LogOut, MessageSquare, Save, Settings } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 
 type Props = { projectName?: string; pageHeading?: string; showSave?: boolean; message?: string; onSave?: () => void; };
 
+function prettySlug(slug: string) {
+  return slug.split("-").filter(Boolean).map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(" ");
+}
+
 export default function AppHeader({ projectName, pageHeading, showSave = false, message = "", onSave }: Props) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [name, setName] = useState(projectName || "");
+  const [name] = useState(projectName || "");
   const slug = useMemo(() => {
     const m = pathname.match(/^\/projects\/([^/]+)/);
     return m ? decodeURIComponent(m[1]) : "";
   }, [pathname]);
 
-  useEffect(() => {
-    if (projectName || !slug || slug === "manage") return;
-    fetch(`/api/projects/${encodeURIComponent(slug)}`, { cache: "no-store" })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => d?.project?.name && setName(d.project.name))
-      .catch(() => {});
-  }, [projectName, slug]);
-
   const isProjects = pathname === "/projects" || pathname === "/projects/manage";
   const isSettings = pathname.includes("/settings");
   const isEditor = pathname.includes("/editor");
+  const displayName = name || (!isProjects && slug ? prettySlug(slug) : "");
   const heading = pageHeading || (isSettings ? "Settings" : isEditor ? "Map & Manage" : isProjects ? "Projects" : "Project");
   const backHref = isProjects ? "/" : "/projects";
   const backLabel = isProjects ? "Back to home" : "Back to projects";
@@ -51,14 +47,13 @@ export default function AppHeader({ projectName, pageHeading, showSave = false, 
     </div>
 
     <div className="app-header-center" aria-live="polite">
-      {name && <span className="app-project-name">{name}</span>}
-      {name && <span className="app-heading-separator">-</span>}
+      {displayName && <span className="app-project-name">{displayName}</span>}
+      {displayName && <span className="app-heading-separator">-</span>}
       <span className="app-page-heading">{heading}</span>
     </div>
 
     <div className="app-header-actions">
       <Link href={backHref} className="app-header-button app-back"><ArrowLeft size={15} /> {backLabel}</Link>
-      {isSettings && <span className="app-status">All changes saved</span>}
       {showSave || isEditor ? <button type="button" className="app-header-button app-save" onClick={save}><Save size={15} /> Save</button> : null}
       {isEditor && <span className="app-message" title={message || "Status"}><MessageSquare size={14} /> {message || "All changes saved"}</span>}
       {slug && <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings"><Settings size={16} /></Link>}
