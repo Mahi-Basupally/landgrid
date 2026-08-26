@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowLeft, Check, Copy, Globe2, LogOut, Shield, Users, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useHeader } from "@/lib/header-context";
+import { Check, Copy, Globe2, Shield, Users, X } from "lucide-react";
 
 type Project = { id: string; slug: string; name: string; address: string; description?: string | null; google_location_url?: string | null; is_public?: boolean };
 type Member = { userId: string; email: string; name?: string | null; role: "admin" | "sales" };
@@ -13,18 +14,15 @@ const primary: React.CSSProperties = { ...button, background: "#172554", borderC
 const card: React.CSSProperties = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 18, boxShadow: "0 1px 2px rgba(15,23,42,.04)" };
 
 export default function SettingsClient({ project: initialProject, members: initialMembers }: { project: Project; members: Member[] }) {
+  const { setState: setHeaderState } = useHeader();
   const [project, setProject] = useState(initialProject);
+  useEffect(() => { setHeaderState({ projectName: initialProject.name }); }, [initialProject.name]);
   const [members, setMembers] = useState(initialMembers);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<"admin" | "sales">("sales");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const shareUrl = useMemo(() => typeof window === "undefined" ? `/projects/${project.slug}` : `${window.location.origin}/projects/${project.slug}`, [project.slug]);
-
-  async function signOut() {
-    await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" });
-    window.location.href = "/";
-  }
 
   async function saveProject(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setMessage("");
@@ -55,11 +53,7 @@ export default function SettingsClient({ project: initialProject, members: initi
   async function changeRole(userId: string, nextRole: "admin" | "sales") { setBusy(true); await fetch(`/api/projects/${project.slug}/members`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId, role: nextRole }) }); await refreshMembers(); setBusy(false); }
   async function removeMember(userId: string) { if (!confirm("Remove this member from the project?")) return; setBusy(true); await fetch(`/api/projects/${project.slug}/members`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId }) }); await refreshMembers(); setBusy(false); }
 
-  return <div style={{ height: "100vh", display: "grid", gridTemplateRows: "68px 1fr", background: "#f3f5f8", color: "#172033", fontFamily: "Inter,system-ui,sans-serif" }}>
-    <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 18px", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
-      <div><small style={{ fontWeight: 800, color: "#64748b" }}>LANDGRID / SETTINGS</small><h2 style={{ margin: 0, fontSize: 20 }}>{project.name}</h2></div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}><span style={{ fontSize: 12, color: busy ? "#b45309" : "#15803d", whiteSpace: "nowrap" }}>{busy ? "Saving…" : message || "All changes saved"}</span><Link href={`/projects/${project.slug}/editor`} style={button}><ArrowLeft size={14} /> Map &amp; Manage</Link><button type="button" onClick={() => void signOut()} style={{ ...button, padding: 8 }} title="Sign out" aria-label="Sign out"><LogOut size={15} /></button></div>
-    </header>
+  return <div style={{ background: "#f3f5f8", color: "#172033", fontFamily: "Inter,system-ui,sans-serif" }}>
     <div style={{ display: "grid", gridTemplateColumns: "250px minmax(0,1fr) 300px", minHeight: 0 }}>
       <aside style={{ background: "#fff", borderRight: "1px solid #e2e8f0", padding: 12, overflow: "auto" }}>
         <div style={{ fontSize: 11, fontWeight: 900, color: "#64748b", margin: "8px 4px" }}>PROJECT SETTINGS</div>

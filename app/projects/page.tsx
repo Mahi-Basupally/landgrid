@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FolderOpen, LogOut, Plus, ArrowRight, X } from "lucide-react";
+import { FolderOpen, Plus, ArrowRight, X } from "lucide-react";
 
 type Project = { id: string; slug: string; name: string; address: string; description?: string | null; role: "admin" | "sales" };
 const btn: React.CSSProperties = { border: "1px solid #dce3df", background: "white", color: "#17211b", padding: "10px 14px", borderRadius: 9, fontWeight: 750, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 };
@@ -13,12 +13,7 @@ export default function Projects() {
   async function load() { setLoading(true); setError(""); try { const r = await fetch("/api/projects", { cache: "no-store" }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to load projects"); setProjects(d.projects || []); } catch (e) { setError(e instanceof Error ? e.message : "Unable to load projects"); } finally { setLoading(false); } }
   useEffect(() => { void load(); }, []);
   async function create(e: React.FormEvent) { e.preventDefault(); setCreating(true); setError(""); try { const r = await fetch("/api/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to create project"); window.location.href = `/projects/${d.project.slug}/editor`; } catch (e) { setError(e instanceof Error ? e.message : "Unable to create project"); setCreating(false); } }
-  async function signOut() { await fetch("/api/auth/signout", { method: "POST", credentials: "same-origin" }); window.location.href = "/"; }
-  return <div style={{ minHeight: "100vh", background: "#f3f5f8", color: "#172033", fontFamily: "Inter,system-ui,sans-serif" }}>
-    <header style={{ height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 22px", background: "white", borderBottom: "1px solid #e2e8f0" }}>
-      <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "inherit" }}><span style={{ width: 34, height: 34, borderRadius: 9, display: "grid", placeItems: "center", background: "#172033", color: "white", fontSize: 11, fontWeight: 900 }}>LG</span><span style={{ fontWeight: 900, letterSpacing: ".08em" }}>LANDGRID</span></Link>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span style={{ fontSize: 12, fontWeight: 800, color: "#64748b" }}>MANAGE PROJECTS</span><button type="button" onClick={() => void signOut()} style={{ ...btn, padding: "8px 11px" }} title="Sign out"><LogOut size={14} /></button></div>
-    </header>
+  return <div style={{ background: "#f3f5f8", color: "#172033", fontFamily: "Inter,system-ui,sans-serif" }}>
     <main style={{ maxWidth: 1320, margin: "0 auto", padding: "34px 22px 60px" }}>
       <section style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 20, flexWrap: "wrap", marginBottom: 22 }}><div><div style={{ fontSize: 11, letterSpacing: ".16em", fontWeight: 900, color: "#728078" }}>YOUR WORKSPACE</div><h1 style={{ margin: "7px 0", fontSize: 34, letterSpacing: "-.035em" }}>Projects</h1><p style={{ margin: 0, color: "#64748b", fontSize: 14 }}>Select a project to open its Map &amp; Manage editor.</p></div><button type="button" onClick={() => { setError(""); setShowCreate(true); }} style={{ ...btn, background: "#172033", color: "white", borderColor: "#172033", padding: "11px 16px" }}><Plus size={16} /> Create project</button></section>
       {error && <div style={{ marginBottom: 16, padding: "11px 13px", borderRadius: 9, background: "#fff1f2", border: "1px solid #fecdd3", color: "#be123c", fontSize: 13 }}>{error}</div>}

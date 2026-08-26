@@ -1,4 +1,26 @@
 "use client";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import AppHeader from "./app-header";
-export default function AppShell({children}:{children:React.ReactNode}){const pathname=usePathname();const publicShell=pathname==="/"||pathname==="/login"||pathname.startsWith("/embed/");const editor=pathname.includes("/editor");if(publicShell||editor)return <>{children}</>;return <div className="app-shell"><AppHeader />{children}</div>}
+import { HeaderContext, HeaderState } from "@/lib/header-context";
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [headerState, setHeaderState] = useState<HeaderState>({ projectName: "", message: "" });
+
+  const noShell = pathname === "/" || pathname === "/login" || pathname.startsWith("/embed/");
+  if (noShell) return <>{children}</>;
+
+  function setState(s: Partial<HeaderState>) {
+    setHeaderState(prev => ({ ...prev, ...s }));
+  }
+
+  return (
+    <HeaderContext.Provider value={{ state: headerState, setState }}>
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        <AppHeader projectName={headerState.projectName} message={headerState.message} />
+        <div style={{ flex: 1, minHeight: 0 }}>{children}</div>
+      </div>
+    </HeaderContext.Provider>
+  );
+}

@@ -1,49 +1,81 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, LogOut, MessageSquare, Save, Settings } from "lucide-react";
+import { ArrowLeft, LogOut, MessageSquare, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
-type Props = { projectName?: string; pageHeading?: string; showSave?: boolean; message?: string; onSave?: () => void; };
-function prettySlug(slug: string) { return slug.split("-").filter(Boolean).map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(" "); }
-export default function AppHeader({ projectName, pageHeading, showSave = false, message = "", onSave }: Props) {
-  const pathname = usePathname(); const [name] = useState(projectName || "");
-  const slug = useMemo(() => { const m = pathname.match(/^\/projects\/([^/]+)/); return m ? decodeURIComponent(m[1]) : ""; }, [pathname]);
-  const isProjects = pathname === "/projects" || pathname === "/projects/manage"; const isSettings = pathname.includes("/settings"); const isEditor = pathname.includes("/editor");
-  const displayName = name || (!isProjects && slug ? prettySlug(slug) : ""); const heading = pageHeading || (isSettings ? "Settings" : isEditor ? "Map & Manage" : isProjects ? "Projects" : "Project");
-  const backHref = isProjects ? "/" : "/projects"; const backLabel = isProjects ? "Back to home" : "Back to projects";
-  function save() { if (onSave) return onSave(); const button = Array.from(document.querySelectorAll("button")).find(b => /\bSave\b/i.test(b.textContent || "")) as HTMLButtonElement | undefined; button?.click(); }
-  async function logout() { try { await fetch("/api/auth/logout", { method: "POST" }); } finally { window.location.href = "/"; } }
+type Props = { projectName?: string; message?: string; };
+
+function prettySlug(slug: string) {
+  return slug.split("-").filter(Boolean).map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(" ");
+}
+
+export default function AppHeader({ projectName, message = "" }: Props) {
+  const pathname = usePathname();
+  const slug = useMemo(() => {
+    const m = pathname.match(/^\/projects\/([^/]+)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }, [pathname]);
+
+  const isProjects = pathname === "/projects" || pathname === "/projects/manage";
+  const isSettings = pathname.includes("/settings");
+  const isEditor = pathname.includes("/editor");
+  const displayName = projectName || (slug ? prettySlug(slug) : "");
+
+  async function logout() {
+    try { await fetch("/api/auth/logout", { method: "POST" }); } finally { window.location.href = "/"; }
+  }
+
   return (
     <header className="app-header">
+      {/* Left: brand + context */}
       <div className="app-header-left">
-        <Link href="/" className="app-brand" aria-label="LandGrid home"><span className="app-brand-mark">LG</span><strong>LANDGRID</strong></Link>
-        {isEditor && displayName && (
+        <Link href="/" className="app-brand" aria-label="LandGrid home">
+          <span className="app-brand-mark">LG</span>
+          <strong>LANDGRID</strong>
+        </Link>
+        {(isEditor || isSettings) && displayName && (
           <>
             <span className="app-divider" />
             <span className="app-project-name">{displayName}</span>
             <span className="app-heading-separator">-</span>
-            <span className="app-page-heading">Map &amp; Manage</span>
-            {message && <span className="app-message" title={message}><MessageSquare size={14} /> {message}</span>}
+            <span className="app-page-heading">{isEditor ? "Map & Manage" : "Settings"}</span>
+            {isEditor && message && (
+              <span className="app-message" title={message}>
+                <MessageSquare size={14} /> {message}
+              </span>
+            )}
           </>
         )}
-        {!isEditor && (
+        {isProjects && (
           <>
             <span className="app-divider" />
-            <nav className="app-nav" aria-label="Primary">
-              {isProjects ? <span className="app-nav-active">PROJECTS</span> : null}
-              {slug && <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className={isSettings ? "app-nav-active" : ""}>SETTINGS</Link>}
-            </nav>
+            <span className="app-page-heading" style={{ color: "#172554", fontWeight: 900 }}>PROJECTS</span>
           </>
         )}
       </div>
+
+      {/* Right: actions */}
       <div className="app-header-actions">
-        {!isEditor && <Link href={backHref} className="app-header-button app-back"><ArrowLeft size={15} /> {backLabel}</Link>}
-        {!isEditor && showSave && <button type="button" className="app-header-button app-save" onClick={save}><Save size={15} /> Save</button>}
-        {isEditor && <Link href="/projects" className="app-header-button app-back"><ArrowLeft size={15} /> Back to Projects</Link>}
-        {slug && <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings"><Settings size={16} /></Link>}
-        <button type="button" className="app-icon-button" onClick={() => void logout()} aria-label="Log out"><LogOut size={16} /></button>
+        {isEditor && (
+          <Link href="/projects" className="app-header-button app-back">
+            <ArrowLeft size={15} /> Back to Projects
+          </Link>
+        )}
+        {isSettings && slug && (
+          <Link href={`/projects/${encodeURIComponent(slug)}/editor`} className="app-header-button app-back">
+            <ArrowLeft size={15} /> Back to Editor
+          </Link>
+        )}
+        {(isEditor || isSettings) && slug && (
+          <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings">
+            <Settings size={16} />
+          </Link>
+        )}
+        <button type="button" className="app-icon-button" onClick={() => void logout()} aria-label="Log out">
+          <LogOut size={16} />
+        </button>
       </div>
     </header>
   );
