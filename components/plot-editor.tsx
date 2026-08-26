@@ -47,6 +47,27 @@ export default function PlotEditor({ projectSlug }: { projectSlug: string }) {
   useEffect(() => { void load(); }, [projectSlug]);
   useEffect(() => { if (!loaded.current || !dirty) return; if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => void save(), 700); return () => { if (saveTimer.current) clearTimeout(saveTimer.current); }; }, [plans, plots, sections, visibility, layers, dirty]);
 
+  useEffect(() => {
+    const loadNativeSize = (kind: "map" | "drone", src: string | null) => {
+      if (!src) return;
+      const img = new window.Image();
+      img.onload = () => {
+        const width = img.naturalWidth || W;
+        const height = img.naturalHeight || H;
+        setLayers(current => {
+          const existing = current[kind];
+          const sameSize = existing.width === width && existing.height === height;
+          if (sameSize) return current;
+          return { ...current, [kind]: { ...existing, x: (W - width) / 2, y: (H - height) / 2, width, height } };
+        });
+      };
+      img.onerror = () => setMessage(`Unable to read ${kind} image dimensions`);
+      img.src = src;
+    };
+    loadNativeSize("map", asset("map"));
+    loadNativeSize("drone", asset("drone"));
+  }, [master?.masterPlanUrl, master?.droneUrl, projectSlug]);
+
   async function load() {
     try {
       const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { cache: "no-store" }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to load plan");
@@ -55,7 +76,7 @@ export default function PlotEditor({ projectSlug }: { projectSlug: string }) {
       const ss: Record<string, string> = {}; ps.filter(p => p.id !== "master_plan").forEach(p => { ss[p.id] = p.points || ""; });
       setPlans(ps); setSections(ss); setVisibility(nextVisibility); setOwners((d.owners || []) as Owner[]); setPlots((d.lots || []).map((p: Plot) => { const q = normalize(parse(p.points || "")), c = center(q); return { ...p, ownerId: p.ownerId || null, points: stringify(q), labelX: c.x, labelY: c.y }; }));
       const g = ps.find(p => p.id === "master_plan")?.layerGeometry;
-      if (g) { if (g.map) setLayers(v => ({ ...v, map: { ...defaultLayer(.72), ...g.map } })); if (g.drone) setLayers(v => ({ ...v, drone: { ...defaultLayer(.42), ...g.drone } })); if (Number.isFinite(g.zoom)) setZoom(Math.max(.25, Math.min(8, Number(g.zoom)))); setPan({ x: Number(g.panX || 0), y: Number(g.panY || 0) }); }
+      if (g) { if (g.map) setLayers(v => ({ ...v, map: { ...defaultLayer(.72), ...g.map } })); if (g.drone) setLayers(v => ({ ...v, drone: { ...defaultLayer(.42), ...g.drone } })); if (Number.isFinite(g.zoom)) setZoom(Math.max(.25, Math.min(8, Number(g.zoom)))); setPan({ x: Number(g.panX || 0), y: Number(g.panY || 0 }); }
       loaded.current = true;
     } catch (e) { setMessage(e instanceof Error ? e.message : "Unable to load plan"); }
   }
@@ -98,7 +119,7 @@ export default function PlotEditor({ projectSlug }: { projectSlug: string }) {
   async function deleteOwner(id: string) { try { const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/owners`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to delete owner"); setOwners(v => v.filter(o => o.id !== id)); setPlots(v => v.map(p => p.ownerId === id ? { ...p, ownerId: null, owner: "" } : p)); setDirty(true); setMessage("Owner removed"); } catch (e) { setMessage(e instanceof Error ? e.message : "Unable to remove owner"); } }
   async function signOut() { try { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/'; } catch { window.location.href = '/'; } }
 
-  const image = (kind: "map" | "drone") => { const src = asset(kind); if (!src || !layers[kind].visible) return null; const l = layers[kind]; return <image key={kind} href={src} x={l.x} y={l.y} width={l.width} height={l.height} opacity={l.opacity} preserveAspectRatio="xMinYMin meet" pointerEvents="none" />; };
+  const image = (kind: "map" | "drone") => { const src = asset(kind); if (!src || !layers[kind].visible) return null; const l = layers[kind]; return <image key={kind} href={src} x={l.x} y={l.y} width={l.width} height={l.height} opacity={l.opacity} preserveAspectRatio="none" pointerEvents="none" />; };
   const renderShapeControls = (q: Point[], id: string, sectionShape: boolean) => q.length === 8 ? q.map((p, i) => <circle key={`point-${i}`} cx={p.x} cy={p.y} r={9 / zoom} fill="white" stroke={sectionShape ? "#7c3aed" : "#1d4ed8"} strokeWidth={3 / zoom} style={{ cursor: "move" }} onPointerDown={e => startPoint(e, id, i, q, sectionShape)} />) : q.map((a, i) => { const b = q[(i + 1) % q.length]; return <line key={`edge-${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="transparent" strokeWidth={22 / zoom} strokeLinecap="round" pointerEvents="stroke" style={{ cursor: i % 2 === 0 ? "ns-resize" : "ew-resize" }} onPointerDown={e => startEdge(e, id, i, q, sectionShape)} />; });
 
   return <div style={{ height: "100vh", display: "grid", gridTemplateRows: "64px 1fr", background: "#f4f6f9", color: "#182235", fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" }}>
