@@ -76,7 +76,7 @@ export default function PlotEditor({ projectSlug }: { projectSlug: string }) {
       const ss: Record<string, string> = {}; ps.filter(p => p.id !== "master_plan").forEach(p => { ss[p.id] = p.points || ""; });
       setPlans(ps); setSections(ss); setVisibility(nextVisibility); setOwners((d.owners || []) as Owner[]); setPlots((d.lots || []).map((p: Plot) => { const q = normalize(parse(p.points || "")), c = center(q); return { ...p, ownerId: p.ownerId || null, points: stringify(q), labelX: c.x, labelY: c.y }; }));
       const g = ps.find(p => p.id === "master_plan")?.layerGeometry;
-      if (g) { if (g.map) setLayers(v => ({ ...v, map: { ...defaultLayer(.72), ...g.map } })); if (g.drone) setLayers(v => ({ ...v, drone: { ...defaultLayer(.42), ...g.drone } })); if (Number.isFinite(g.zoom)) setZoom(Math.max(.25, Math.min(8, Number(g.zoom)))); setPan({ x: Number(g.panX || 0), y: Number(g.panY || 0 }); }
+      if (g) { if (g.map) setLayers(v => ({ ...v, map: { ...defaultLayer(.72), ...g.map } })); if (g.drone) setLayers(v => ({ ...v, drone: { ...defaultLayer(.42), ...g.drone } })); if (Number.isFinite(g.zoom)) setZoom(Math.max(.25, Math.min(8, Number(g.zoom)))); setPan({ x: Number(g.panX || 0), y: Number(g.panY || 0) }); }
       loaded.current = true;
     } catch (e) { setMessage(e instanceof Error ? e.message : "Unable to load plan"); }
   }
