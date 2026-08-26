@@ -5,15 +5,17 @@ import LotEditor from "../../../../components/lot-editor";
 export default function CapeTownEditorAliasPage() {
   return (
     <div style={{ position: "relative", width: "100vw", height: "100vh" }}>
+      <style>{`@media (max-width: 760px) { .landgrid-editor-settings { right: 178px !important; } }`}</style>
       <LotEditor projectSlug="cape-town" />
       <Link
         href="/projects/capetown/settings"
         aria-label="Project settings"
         title="Project settings"
+        className="landgrid-editor-settings"
         style={{
           position: "fixed",
           top: 14,
-          right: 86,
+          right: "clamp(180px, 22vw, 300px)",
           zIndex: 100,
           width: 36,
           height: 36,
