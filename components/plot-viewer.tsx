@@ -185,10 +185,9 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     const pts = q;
     const minX = Math.min(...pts.map(p=>p.x)), maxX = Math.max(...pts.map(p=>p.x));
     const minY = Math.min(...pts.map(p=>p.y)), maxY = Math.max(...pts.map(p=>p.y));
-    const targetZoom = Math.min(6, Math.max(1.5, Math.min(W/(Math.max(1,maxX-minX)*2), H/(Math.max(1,maxY-minY)*2))));
     setSelected(lot.id);
     setPlanId(lot.sectionId || "master_plan");
-    setZoom(targetZoom);
+    setZoom(1.5);
     setPan({ x: c.x - W / 2, y: c.y - H / 2 });
   }
 
