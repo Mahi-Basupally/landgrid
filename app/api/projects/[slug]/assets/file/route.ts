@@ -57,9 +57,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     }
 
     const db = supabaseAdmin();
-    const { data: plan, error: planError } = await db.from('project_site_plans').select('map_url,drone_url').eq('project_id', project.id).eq('plan_type', planType).maybeSingle();
-    if (planError) return NextResponse.json({ error: planError.message }, { status: 500 });
-    const value = kind === 'master-plan' ? plan?.map_url : plan?.drone_url;
+    // Use v param directly if provided (viewer passes the storage URL it already has)
+    const vParam = url.searchParams.get('v');
+    let value: string | null | undefined = vParam || null;
+
+    // Fall back to DB lookup if no v param
+    if (!value) {
+      const { data: plan, error: planError } = await db.from('project_site_plans').select('map_url,drone_url').eq('project_id', project.id).eq('plan_type', planType).maybeSingle();
+      if (planError) return NextResponse.json({ error: planError.message }, { status: 500 });
+      value = kind === 'master-plan' ? plan?.map_url : plan?.drone_url;
+    }
     if (!value) return NextResponse.json({ error: 'Asset not configured' }, { status: 404 });
 
     const parsed = parseStorage(value);
