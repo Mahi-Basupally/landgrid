@@ -61,21 +61,27 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     const hEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a < 45 || a > 135; }).sort((a,b) => b.len-a.len);
     const vEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a >= 45 && a <= 135; }).sort((a,b) => b.len-a.len);
     const sorted = [hEdges[0], vEdges[0]].filter(Boolean);
-    const fs = 16/z, offset = 20/z;
+    const fs = 16/z, offset = 28/z;
     return <>
       <text x={c.x} y={isSelected && sqYd!=null ? c.y - 16/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={20/z} fontWeight={900} pointerEvents="none" fill="#172033" paintOrder="stroke" stroke="white" strokeWidth={4/z}>{lot.number}</text>
       {isSelected && sqYd!=null && <text x={c.x} y={c.y+13/z} textAnchor="middle" dominantBaseline="middle" fontSize={13/z} fontWeight={700} pointerEvents="none" fill="#475569" paintOrder="stroke" stroke="white" strokeWidth={3/z}>{sqYd} sq.yd</text>}
       {isSelected && (lm||wm) && sorted.map((e,i) => {
-        const perpAngle = e.angle+90;
-        const px2 = e.mx+Math.cos(perpAngle*Math.PI/180)*offset, py2 = e.my+Math.sin(perpAngle*Math.PI/180)*offset;
-        const px = i%2===0?px2:e.mx-Math.cos(perpAngle*Math.PI/180)*offset;
-        const py = i%2===0?py2:e.my-Math.sin(perpAngle*Math.PI/180)*offset;
         if (i >= 2) return null;
-        const storedDim = lm && wm ? (i === 0 ? lm : wm) : (lm || wm || null);
+        const absAngle = Math.abs(e.angle % 180);
+        const isHorizontal = absAngle < 45 || absAngle > 135;
+        const storedDim = lm && wm ? (isHorizontal ? lm : wm) : (lm || wm || null);
         const label = storedDim ? dimStr(storedDim) : null;
         if (!label) return null;
+        // Always place label OUTSIDE the plot
+        const perpAngle = e.angle+90;
+        const cosP = Math.cos(perpAngle*Math.PI/180), sinP = Math.sin(perpAngle*Math.PI/180);
+        const toCenter = { x: c.x - e.mx, y: c.y - e.my };
+        const dot = cosP * toCenter.x + sinP * toCenter.y;
+        const sign = dot > 0 ? -1 : 1;
+        const px = e.mx + cosP * offset * sign;
+        const py = e.my + sinP * offset * sign;
         let rot = e.angle; if (rot>90) rot-=180; if (rot<-90) rot+=180;
-        return <text key={i} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fontWeight={800} pointerEvents="none" fill="#1e40af" paintOrder="stroke" stroke="rgba(255,255,255,.95)" strokeWidth={3/z} transform={`rotate(${rot},${px},${py})`}>{label}</text>;
+        return <text key={i} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fontWeight={400} pointerEvents="none" fill="#1e40af" paintOrder="stroke" stroke="rgba(255,255,255,.95)" strokeWidth={3/z} transform={`rotate(${rot},${px},${py})`}>{label}</text>;
       })}
     </>;
   }

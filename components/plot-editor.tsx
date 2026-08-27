@@ -138,38 +138,35 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
   function renderPlotAnnotations(q: Point[], p: Plot, z: number, active = false) {
     const c = center(q);
     const sqYd = p.area != null ? Number(p.area) : null;
-    const showArea = active; // only show area when selected
+    const showArea = active;
     const lm = p.lengthM, wm = p.widthM;
-    // Edge dimension labels — only show on the 4 main edges (longest 4 of polygon)
     const edges = q.map((pt, i) => { const next = q[(i+1)%q.length]; return { a: pt, b: next, len: edgeLenM(pt, next), mx: (pt.x+next.x)/2, my: (pt.y+next.y)/2, angle: Math.atan2(next.y-pt.y, next.x-pt.x)*180/Math.PI }; });
-    // Pick one horizontal and one vertical edge (longest of each orientation)
     const hEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a < 45 || a > 135; }).sort((a,b) => b.len-a.len);
     const vEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a >= 45 && a <= 135; }).sort((a,b) => b.len-a.len);
     const sorted = [hEdges[0], vEdges[0]].filter(Boolean);
-    const fs = 16/z, offset = 20/z;
+    const fs = 16/z, offset = 28/z;
     return <>
-      {/* Plot number */}
       <text x={c.x} y={active && sqYd ? c.y - 18/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={22/z} fontWeight={900} pointerEvents="none" fill="#172033" paintOrder="stroke" stroke="white" strokeWidth={5/z}>{p.number}</text>
-      {/* Area in sq.yd — only when selected */}
       {showArea && sqYd != null && <text x={c.x} y={c.y + 16/z} textAnchor="middle" dominantBaseline="middle" fontSize={14/z} fontWeight={700} pointerEvents="none" fill="#475569" paintOrder="stroke" stroke="white" strokeWidth={3/z}>{sqYd} sq.yd</text>}
-      {/* Edge dimension labels — only for selected plot */}
       {active && (lm || wm) && sorted.map((e, i) => {
-        const perpAngle = e.angle + 90;
-        const px2 = e.mx + Math.cos(perpAngle*Math.PI/180)*offset;
-        const py2 = e.my + Math.sin(perpAngle*Math.PI/180)*offset;
-        // alternate sides to avoid overlap
-        const px = i%2===0 ? px2 : e.mx - Math.cos(perpAngle*Math.PI/180)*offset;
-        const py = i%2===0 ? py2 : e.my - Math.sin(perpAngle*Math.PI/180)*offset;
-        // Use stored dims for the two longest edges; pixel length for others
         if (i >= 2) return null;
-        // Determine orientation: horizontal-ish edges get lm, vertical-ish get wm
         const absAngle = Math.abs(e.angle % 180);
         const isHorizontal = absAngle < 45 || absAngle > 135;
         const storedDim = lm && wm ? (isHorizontal ? lm : wm) : (lm || wm || null);
         const label = storedDim ? dimStr(storedDim) : null;
         if (!label) return null;
+        // Always place label OUTSIDE the plot by checking which perp direction moves away from center
+        const perpAngle = e.angle + 90;
+        const cosP = Math.cos(perpAngle*Math.PI/180), sinP = Math.sin(perpAngle*Math.PI/180);
+        // candidate outside = midpoint offset away from plot center
+        const toCenter = { x: c.x - e.mx, y: c.y - e.my };
+        const dot = cosP * toCenter.x + sinP * toCenter.y;
+        // if dot > 0, perp direction points toward center — flip it
+        const sign = dot > 0 ? -1 : 1;
+        const px = e.mx + cosP * offset * sign;
+        const py = e.my + sinP * offset * sign;
         let rot = e.angle; if (rot > 90) rot -= 180; if (rot < -90) rot += 180;
-        return <text key={i} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fontWeight={800} pointerEvents="none" fill="#1e40af" paintOrder="stroke" stroke="rgba(255,255,255,.95)" strokeWidth={3/z} transform={`rotate(${rot},${px},${py})`}>{label}</text>;
+        return <text key={i} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fontWeight={400} pointerEvents="none" fill="#1e40af" paintOrder="stroke" stroke="rgba(255,255,255,.95)" strokeWidth={3/z} transform={`rotate(${rot},${px},${py})`}>{label}</text>;
       })}
     </>;
   }
