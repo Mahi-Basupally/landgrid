@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Minus, Plus, Search, X } from "lucide-react";
 
 type Point = { x: number; y: number };
-type Plan = { id: string; name: string; sortOrder?: number; masterPlanUrl?: string | null; droneUrl?: string | null; points?: string | null };
+type Layer = { x: number; y: number; width: number; height: number; opacity: number; visible: boolean };
+type Plan = { id: string; name: string; sortOrder?: number; masterPlanUrl?: string | null; droneUrl?: string | null; points?: string | null; layerGeometry?: any };
 type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; direction: string; model: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
 
 const DEFAULT_W = 1600, DEFAULT_H = 1000;
@@ -27,6 +28,8 @@ function statusColor(status: string) {
 export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   const [canvasW, setCanvasW] = useState(DEFAULT_W), [canvasH, setCanvasH] = useState(DEFAULT_H);
   const W = canvasW, H = canvasH;
+  const [mapLayer,   setMapLayer]   = useState<Layer>({ x: 0, y: 0, width: DEFAULT_W, height: DEFAULT_H, opacity: 1, visible: true });
+  const [droneLayer, setDroneLayer] = useState<Layer>({ x: 0, y: 0, width: DEFAULT_W, height: DEFAULT_H, opacity: 1, visible: true });
   const [plans, setPlans] = useState<Plan[]>([]);
   const [lots,  setLots]  = useState<Lot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -129,8 +132,6 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
 
   if (loading) return <div style={{ height: "100%", display: "grid", placeItems: "center", color: "#64748b", fontSize: 14 }}>Loading plan…</div>;
 
-  const src = assetUrl(view);
-
   return (
     <div style={{ height: "100%", display: "grid", gridTemplateColumns: "260px minmax(0,1fr) 300px", background: "#f4f6f9", fontFamily: "Inter,ui-sans-serif,system-ui,sans-serif", fontSize: 13, color: "#182235" }}>
 
@@ -216,8 +217,13 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           onWheel={e => { e.preventDefault(); const delta = e.deltaY > 0 ? 1/1.15 : 1.15; setZoom(z => Math.min(8, Math.max(.25, +(z * delta).toFixed(2)))); }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", touchAction: "none", cursor: drag ? "grabbing" : "grab" }}
         >
-          {/* Background image */}
-          {src && <image href={src} x={0} y={0} width={W} height={H} preserveAspectRatio="none" pointerEvents="none" />}
+          {/* Background images — rendered at editor layer coordinates */}
+          {droneLayer.visible && assetUrl("drone") && (
+            <image href={assetUrl("drone")!} x={droneLayer.x} y={droneLayer.y} width={droneLayer.width} height={droneLayer.height} opacity={droneLayer.opacity} preserveAspectRatio="none" pointerEvents="none" />
+          )}
+          {mapLayer.visible && assetUrl("map") && (
+            <image href={assetUrl("map")!} x={mapLayer.x} y={mapLayer.y} width={mapLayer.width} height={mapLayer.height} opacity={mapLayer.opacity} preserveAspectRatio="none" pointerEvents="none" />
+          )}
 
           {/* Plots */}
           {planLots.map(lot => {
@@ -241,7 +247,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           })}
         </svg>
 
-        {!src && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#64748b", pointerEvents: "none", fontSize: 13 }}>No site plan image uploaded yet.</div>}
+        {!assetUrl("map") && !assetUrl("drone") && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#64748b", pointerEvents: "none", fontSize: 13 }}>No site plan image uploaded yet.</div>}
       </main>
 
       {/* ── RIGHT PANEL ── */}
