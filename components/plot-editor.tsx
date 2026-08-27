@@ -142,7 +142,10 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
     const lm = p.lengthM, wm = p.widthM;
     // Edge dimension labels — only show on the 4 main edges (longest 4 of polygon)
     const edges = q.map((pt, i) => { const next = q[(i+1)%q.length]; return { a: pt, b: next, len: edgeLenM(pt, next), mx: (pt.x+next.x)/2, my: (pt.y+next.y)/2, angle: Math.atan2(next.y-pt.y, next.x-pt.x)*180/Math.PI }; });
-    const sorted = [...edges].sort((a,b) => b.len-a.len).slice(0, 4);
+    // Pick one horizontal and one vertical edge (longest of each orientation)
+    const hEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a < 45 || a > 135; }).sort((a,b) => b.len-a.len);
+    const vEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a >= 45 && a <= 135; }).sort((a,b) => b.len-a.len);
+    const sorted = [hEdges[0], vEdges[0]].filter(Boolean);
     const fs = 16/z, offset = 20/z;
     return <>
       {/* Plot number */}

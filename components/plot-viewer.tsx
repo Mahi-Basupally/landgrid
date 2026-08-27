@@ -58,7 +58,9 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     const sqYd = lot.area != null ? Number(lot.area) : null;
     const lm = lot.lengthM, wm = lot.widthM;
     const edges = q.map((pt, i) => { const next = q[(i+1)%q.length]; return { a: pt, b: next, len: edgeLenM(pt, next), mx: (pt.x+next.x)/2, my: (pt.y+next.y)/2, angle: Math.atan2(next.y-pt.y, next.x-pt.x)*180/Math.PI }; });
-    const sorted = [...edges].sort((a,b) => b.len-a.len).slice(0,4);
+    const hEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a < 45 || a > 135; }).sort((a,b) => b.len-a.len);
+    const vEdges = edges.filter(e => { const a = Math.abs(e.angle % 180); return a >= 45 && a <= 135; }).sort((a,b) => b.len-a.len);
+    const sorted = [hEdges[0], vEdges[0]].filter(Boolean);
     const fs = 16/z, offset = 20/z;
     return <>
       <text x={c.x} y={isSelected && sqYd!=null ? c.y - 16/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={20/z} fontWeight={900} pointerEvents="none" fill="#172033" paintOrder="stroke" stroke="white" strokeWidth={4/z}>{lot.number}</text>
