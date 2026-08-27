@@ -1,5 +1,6 @@
 import './globals.css';
 import './settings-layout.css';
+import './plot-viewer.css';
 import type { ReactNode } from 'react';
 import AppShell from '@/components/app-shell';
 
