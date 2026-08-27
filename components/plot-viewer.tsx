@@ -61,8 +61,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     const sorted = [...edges].sort((a,b) => b.len-a.len).slice(0,4);
     const fs = 16/z, offset = 20/z;
     return <>
-      <text x={c.x} y={sqYd!=null ? c.y - 16/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={20/z} fontWeight={900} pointerEvents="none" fill="#172033" paintOrder="stroke" stroke="white" strokeWidth={4/z}>{lot.number}</text>
-      {sqYd!=null && <text x={c.x} y={c.y+13/z} textAnchor="middle" dominantBaseline="middle" fontSize={13/z} fontWeight={700} pointerEvents="none" fill="#475569" paintOrder="stroke" stroke="white" strokeWidth={3/z}>{sqYd} sq.yd</text>}
+      <text x={c.x} y={isSelected && sqYd!=null ? c.y - 16/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={20/z} fontWeight={900} pointerEvents="none" fill="#172033" paintOrder="stroke" stroke="white" strokeWidth={4/z}>{lot.number}</text>
+      {isSelected && sqYd!=null && <text x={c.x} y={c.y+13/z} textAnchor="middle" dominantBaseline="middle" fontSize={13/z} fontWeight={700} pointerEvents="none" fill="#475569" paintOrder="stroke" stroke="white" strokeWidth={3/z}>{sqYd} sq.yd</text>}
       {isSelected && (lm||wm) && sorted.map((e,i) => {
         const perpAngle = e.angle+90;
         const px2 = e.mx+Math.cos(perpAngle*Math.PI/180)*offset, py2 = e.my+Math.sin(perpAngle*Math.PI/180)*offset;
