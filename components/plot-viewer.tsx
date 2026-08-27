@@ -59,6 +59,31 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { cache: "no-store" })
       .then(r => r.json())
       .then(d => {
+        if (d.canvasWidth && d.canvasHeight) {
+          setCanvasW(d.canvasWidth);
+          setCanvasH(d.canvasHeight);
+        }
+        const masterPlan = (d.sections || []).find((s: any) => s.id === 'master_plan');
+        const geom = masterPlan?.layerGeometry;
+        const iw = masterPlan?.imageWidth ?? null;
+        const ih = masterPlan?.imageHeight ?? null;
+        const cw = d.canvasWidth || DEFAULT_W;
+        const ch = d.canvasHeight || DEFAULT_H;
+        // Editor places image at: x = (W - imageW) / 2, y = (H - imageH) / 2
+        const defaultX = iw ? (cw - iw) / 2 : 0;
+        const defaultY = ih ? (ch - ih) / 2 : 0;
+        const defaultW = iw || cw;
+        const defaultH = ih || ch;
+        if (geom?.map && (geom.map.width || geom.map.height)) {
+          setMapLayer(l => ({ ...l, ...geom.map, visible: geom.map.visible !== false }));
+        } else {
+          setMapLayer(l => ({ ...l, x: defaultX, y: defaultY, width: defaultW, height: defaultH, visible: true }));
+        }
+        if (geom?.drone && (geom.drone.width || geom.drone.height)) {
+          setDroneLayer(l => ({ ...l, ...geom.drone, visible: geom.drone.visible !== false }));
+        } else {
+          setDroneLayer(l => ({ ...l, x: defaultX, y: defaultY, width: defaultW, height: defaultH, visible: true }));
+        }
         setPlans(d.sections || []);
         setLots((d.lots || []).map((l: any) => ({
           id: l.id, number: l.number, status: l.status || "available",
