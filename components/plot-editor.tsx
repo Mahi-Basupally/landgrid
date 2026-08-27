@@ -159,18 +159,10 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
         const py = i%2===0 ? py2 : e.my - Math.sin(perpAngle*Math.PI/180)*offset;
         // Use stored dims for the two longest edges; pixel length for others
         if (i >= 2) return null;
-        // Assign dims by matching pixel edge ratio to stored dim ratio
-        // longer pixel edge gets the dim it's proportionally closer to
-        let storedDim: number | null = null;
-        if (lm && wm) {
-          const longEdge = sorted[0].len, shortEdge = sorted[1].len;
-          // which stored dim is closer to longEdge proportionally?
-          const diffLmLong = Math.abs(longEdge / (longEdge + shortEdge) - lm / (lm + wm));
-          const diffWmLong = Math.abs(longEdge / (longEdge + shortEdge) - wm / (lm + wm));
-          const longDim = diffLmLong <= diffWmLong ? lm : wm;
-          const shortDim = diffLmLong <= diffWmLong ? wm : lm;
-          storedDim = i === 0 ? longDim : shortDim;
-        } else { storedDim = lm || wm || null; }
+        // Determine orientation: horizontal-ish edges get lm, vertical-ish get wm
+        const absAngle = Math.abs(e.angle % 180);
+        const isHorizontal = absAngle < 45 || absAngle > 135;
+        const storedDim = lm && wm ? (isHorizontal ? lm : wm) : (lm || wm || null);
         const label = storedDim ? dimStr(storedDim) : null;
         if (!label) return null;
         let rot = e.angle; if (rot > 90) rot -= 180; if (rot < -90) rot += 180;
