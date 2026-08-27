@@ -43,8 +43,14 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   // filters
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
+  const [viewUnit, setViewUnit] = useState<"m"|"ft"|"yd">("m");
 
   const svgRef = useRef<SVGSVGElement | null>(null);
+  function convertDim(m: number) {
+    if (viewUnit === "ft") return +(m * 3.28084).toFixed(2);
+    if (viewUnit === "yd") return +(m * 1.09361).toFixed(2);
+    return +m.toFixed(2);
+  }
 
   const master = plans.find(p => p.id === "master_plan") || plans[0];
   const sectionList = useMemo(() => plans.filter(p => p.id !== "master_plan"), [plans]);
@@ -289,7 +295,14 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
             <div>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                 <div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontSize: 10, letterSpacing: 1, fontWeight: 900, color: "#64748b" }}>PLOT DETAILS</div>
+                  <select value={viewUnit} onChange={e => setViewUnit(e.target.value as "m"|"ft"|"yd")} style={{ fontSize: 11, fontWeight: 700, border: "1px solid #e2e8f0", borderRadius: 6, padding: "2px 6px", background: "#f8fafc", cursor: "pointer" }}>
+                    <option value="m">Meters</option>
+                    <option value="ft">Feet</option>
+                    <option value="yd">Yards</option>
+                  </select>
+                </div>
                   <h3 style={{ margin: "4px 0 0", fontSize: 22, letterSpacing: "-.02em" }}>Plot {selectedLot.number}</h3>
                 </div>
                 <button onClick={() => setSelected(null)} style={{ ...btn, padding: 6, marginTop: 2 }}><X size={14} /></button>
