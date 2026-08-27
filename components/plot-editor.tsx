@@ -13,21 +13,23 @@ type Plot = { id: string; number: string; status: string; owner: string; ownerId
 type SectionVisibility = { hidden: boolean; plotsHidden: boolean };
 type Drag = { kind: "pan" | "move" | "edge" | "point"; id: string; start: Point; points?: Point[]; edge?: number; point?: number; panStart?: Point; section?: boolean };
 
-const W = 1600, H = 1000;
+const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const parse = (s: string): Point[] => s.trim().split(/\s+/).filter(Boolean).map(v => v.split(",").map(Number)).filter(v => Number.isFinite(v[0]) && Number.isFinite(v[1])).map(([x, y]) => ({ x, y }));
 const stringify = (p: Point[]) => p.map(v => `${Math.round(v.x)},${Math.round(v.y)}`).join(" ");
-const center = (p: Point[]) => p.length ? { x: p.reduce((a, v) => a + v.x, 0) / p.length, y: p.reduce((a, v) => a + v.y, 0) / p.length } : { x: W / 2, y: H / 2 };
-const bounds = (p: Point[]) => !p.length ? { minX: 0, minY: 0, maxX: W, maxY: H } : { minX: Math.min(...p.map(v => v.x)), minY: Math.min(...p.map(v => v.y)), maxX: Math.max(...p.map(v => v.x)), maxY: Math.max(...p.map(v => v.y)) };
+const center = (p: Point[]) => p.length ? { x: p.reduce((a, v) => a + v.x, 0) / p.length, y: p.reduce((a, v) => a + v.y, 0) / p.length } : { x: DEFAULT_W / 2, y: DEFAULT_H / 2 };
+const bounds = (p: Point[]) => !p.length ? { minX: 0, minY: 0, maxX: DEFAULT_W, maxY: DEFAULT_H } : { minX: Math.min(...p.map(v => v.x)), minY: Math.min(...p.map(v => v.y)), maxX: Math.max(...p.map(v => v.x)), maxY: Math.max(...p.map(v => v.y)) };
 const rectangle = (p: Point[]): Point[] => { const b = bounds(p); return [{ x: b.minX, y: b.minY }, { x: b.maxX, y: b.minY }, { x: b.maxX, y: b.maxY }, { x: b.minX, y: b.maxY }]; };
 const polygon8 = (p: Point[]): Point[] => { const b = bounds(p), mx = (b.minX + b.maxX) / 2, my = (b.minY + b.maxY) / 2; return [{ x: b.minX, y: b.minY }, { x: mx, y: b.minY }, { x: b.maxX, y: b.minY }, { x: b.maxX, y: my }, { x: b.maxX, y: b.maxY }, { x: mx, y: b.maxY }, { x: b.minX, y: b.maxY }, { x: b.minX, y: my }]; };
 const normalize = (p: Point[]) => p.length === 4 || p.length === 8 ? p : p.length >= 3 ? p : rectangle([{ x: 600, y: 400 }, { x: 800, y: 400 }, { x: 800, y: 520 }, { x: 600, y: 520 }]);
-const defaultLayer = (opacity: number): Layer => ({ visible: true, opacity, x: 0, y: 0, width: W, height: H });
+const defaultLayer = (opacity: number): Layer => ({ visible: true, opacity, x: 0, y: 0, width: DEFAULT_W, height: DEFAULT_H });
 const defaultLayers = (): Layers => ({ map: defaultLayer(.72), drone: defaultLayer(.42) });
 const emptyVisibility = (): SectionVisibility => ({ hidden: false, plotsHidden: false });
 
 export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlug: string; onStatusChange?: (msg: string) => void }) {
   const [plans, setPlans] = useState<Plan[]>([]), [plots, setPlots] = useState<Plot[]>([]), [sections, setSections] = useState<Record<string, string>>({}), [owners, setOwners] = useState<Owner[]>([]);
   const [visibility, setVisibility] = useState<Record<string, SectionVisibility>>({});
+  const [canvasW, setCanvasW] = useState(DEFAULT_W), [canvasH, setCanvasH] = useState(DEFAULT_H);
+  const W = canvasW, H = canvasH;
   const [planId, setPlanId] = useState("master_plan"), [selected, setSelected] = useState<string | null>(null), [selectedIds, setSelectedIds] = useState<Set<string>>(new Set()), [selectedSection, setSelectedSection] = useState<string | null>(null), [shapeMode, setShapeMode] = useState<ShapeMode>("polygon");
   const [layers, setLayers] = useState<Layers>(defaultLayers()), [zoom, setZoom] = useState(1), [pan, setPan] = useState<Point>({ x: 0, y: 0 }), [drag, setDrag] = useState<Drag | null>(null), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<{ kind: "plot" | "section"; id: string; label: string } | null>(null), [uploading, setUploading] = useState<"map" | "drone" | null>(null), [ownerName, setOwnerName] = useState(""), [ownerEmail, setOwnerEmail] = useState(""), [ownerPhone, setOwnerPhone] = useState(""), [ownersOpen, setOwnersOpen] = useState(false);
@@ -71,6 +73,7 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
   async function load() {
     try {
       const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { cache: "no-store" }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to load plan");
+      if (d.canvasWidth && d.canvasHeight) { setCanvasW(d.canvasWidth); setCanvasH(d.canvasHeight); }
       const ps = (d.sections || []) as Plan[], nextVisibility: Record<string, SectionVisibility> = {};
       ps.filter(p => p.id !== "master_plan").forEach(p => { const g = p.layerGeometry || {}; nextVisibility[p.id] = { hidden: Boolean(g.hidden), plotsHidden: Boolean(g.plotsHidden) }; });
       const ss: Record<string, string> = {}; ps.filter(p => p.id !== "master_plan").forEach(p => { ss[p.id] = p.points || ""; });
@@ -86,7 +89,7 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
     try {
       const masterGeometry = { map: layers.map, drone: layers.drone, zoom, panX: pan.x, panY: pan.y };
       const payload = plans.map(p => ({ ...p, points: p.id === "master_plan" ? p.points || null : sections[p.id] || p.points || null, layerGeometry: p.id === "master_plan" ? masterGeometry : { ...(p.layerGeometry || {}), ...(visibility[p.id] || {}) } }));
-      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sections: payload, lots: plots.map(p => ({ ...p, ownerId: p.ownerId || null })) }) }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to save");
+      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sections: payload, lots: plots.map(p => ({ ...p, ownerId: p.ownerId || null })), canvasWidth: W, canvasHeight: H }) }), d = await r.json(); if (!r.ok) throw new Error(d.error || "Unable to save");
       setDirty(false); setMessage("All changes saved"); onStatusChange?.("All changes saved");
     } catch (e) { const msg = e instanceof Error ? e.message : "Unable to save"; setMessage(msg); onStatusChange?.(msg); } finally { setBusy(false); }
   }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getUserFromSession, getMembership } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import sharp from 'sharp';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -67,10 +68,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
 
     const storedValue = `storage://${path}`;
     const field = kind === 'master-plan' ? 'map_url' : 'drone_url';
-    const { error: updateError } = await db.from('project_site_plans').update({ [field]: storedValue }).eq('id', plan.id).eq('project_id', project.id);
+
+    // Read native image dimensions
+    let imageWidth: number | null = null;
+    let imageHeight: number | null = null;
+    try {
+      const buf = Buffer.from(await file.arrayBuffer());
+      const meta = await sharp(buf).metadata();
+      imageWidth  = meta.width  ?? null;
+      imageHeight = meta.height ?? null;
+    } catch { /* non-fatal — dimensions just won't be saved */ }
+
+    // Compute canvas dimensions preserving aspect ratio at width=1600
+    let canvasWidth  = 1600;
+    let canvasHeight = 1000;
+    if (imageWidth && imageHeight) {
+      canvasWidth  = 1600;
+      canvasHeight = Math.round(1600 / (imageWidth / imageHeight));
+    }
+
+    const updateFields: Record<string, unknown> = {
+      [field]: storedValue,
+      canvas_width:  canvasWidth,
+      canvas_height: canvasHeight,
+      ...(imageWidth  != null ? { image_width:  imageWidth  } : {}),
+      ...(imageHeight != null ? { image_height: imageHeight } : {}),
+    };
+
+    const { error: updateError } = await db.from('project_site_plans').update(updateFields).eq('id', plan.id).eq('project_id', project.id);
     if (updateError) return NextResponse.json({ error: `Plan update failed: ${updateError.message}` }, { status: 500 });
 
-    return NextResponse.json({ ok: true, path, kind, planType, savedValue: storedValue });
+    return NextResponse.json({ ok: true, path, kind, planType, savedValue: storedValue, canvasWidth, canvasHeight, imageWidth, imageHeight });
   } catch (error) {
     console.error('[assets-post]', error);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Upload failed' }, { status: 500 });

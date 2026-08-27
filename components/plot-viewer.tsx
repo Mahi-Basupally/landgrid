@@ -7,10 +7,10 @@ type Point = { x: number; y: number };
 type Plan = { id: string; name: string; sortOrder?: number; masterPlanUrl?: string | null; droneUrl?: string | null; points?: string | null };
 type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; direction: string; model: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
 
-const W = 1600, H = 1000;
+const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const parse = (s: string): Point[] => s.trim().split(/\s+/).filter(Boolean).map(v => v.split(",").map(Number)).filter(v => Number.isFinite(v[0]) && Number.isFinite(v[1])).map(([x, y]) => ({ x, y }));
 const stringify = (p: Point[]) => p.map(v => `${Math.round(v.x)},${Math.round(v.y)}`).join(" ");
-const center = (p: Point[]) => p.length ? { x: p.reduce((a, v) => a + v.x, 0) / p.length, y: p.reduce((a, v) => a + v.y, 0) / p.length } : { x: W / 2, y: H / 2 };
+const center = (p: Point[]) => p.length ? { x: p.reduce((a, v) => a + v.x, 0) / p.length, y: p.reduce((a, v) => a + v.y, 0) / p.length } : { x: DEFAULT_W / 2, y: DEFAULT_H / 2 };
 const normalize = (p: Point[]) => p.length >= 3 ? p : [{ x: 600, y: 400 }, { x: 800, y: 400 }, { x: 800, y: 520 }, { x: 600, y: 520 }];
 
 const STATUS_COLORS: Record<string, { fill: string; stroke: string; label: string }> = {
@@ -25,6 +25,8 @@ function statusColor(status: string) {
 }
 
 export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
+  const [canvasW, setCanvasW] = useState(DEFAULT_W), [canvasH, setCanvasH] = useState(DEFAULT_H);
+  const W = canvasW, H = canvasH;
   const [plans, setPlans] = useState<Plan[]>([]);
   const [lots,  setLots]  = useState<Lot[]>([]);
   const [loading, setLoading] = useState(true);
