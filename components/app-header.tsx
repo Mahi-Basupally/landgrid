@@ -5,13 +5,13 @@ import { ArrowLeft, LogOut, MessageSquare, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
-type Props = { projectName?: string; message?: string; };
+type Props = { projectName?: string; message?: string; isLoggedIn?: boolean };
 
 function prettySlug(slug: string) {
   return slug.split("-").filter(Boolean).map(v => v.charAt(0).toUpperCase() + v.slice(1)).join(" ");
 }
 
-export default function AppHeader({ projectName, message = "" }: Props) {
+export default function AppHeader({ projectName, message = "", isLoggedIn = true }: Props) {
   const pathname = usePathname();
   const slug = useMemo(() => {
     const m = pathname.match(/^\/projects\/([^/]+)/);
@@ -74,14 +74,14 @@ export default function AppHeader({ projectName, message = "" }: Props) {
             <ArrowLeft size={15} /> Back to Projects
           </Link>
         )}
-        {(isEditor || isSettings || isView) && slug && (
+        {(isEditor || isSettings || (isView && isLoggedIn)) && slug && (
           <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings">
             <Settings size={16} />
           </Link>
         )}
-        <button type="button" className="app-icon-button" onClick={() => void logout()} aria-label="Log out">
+        {isLoggedIn && <button type="button" className="app-icon-button" onClick={() => void logout()} aria-label="Log out">
           <LogOut size={16} />
-        </button>
+        </button>}
       </div>
     </header>
   );

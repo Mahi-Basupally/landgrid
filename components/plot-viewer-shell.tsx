@@ -12,9 +12,9 @@ const PlotViewer = dynamic(() => import('./plot-viewer'), {
   ),
 });
 
-export default function PlotViewerShell({ projectSlug, projectName }: { projectSlug: string; projectName: string }) {
+export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn = false }: { projectSlug: string; projectName: string; isLoggedIn?: boolean }) {
   const { setState } = useHeader();
-  useEffect(() => { setState({ projectName }); }, [projectName]);
+  useEffect(() => { setState({ projectName, isLoggedIn }); }, [projectName, isLoggedIn]);
   return (
     <div style={{ height: '100%', overflow: 'hidden' }}>
       <PlotViewer projectSlug={projectSlug} />

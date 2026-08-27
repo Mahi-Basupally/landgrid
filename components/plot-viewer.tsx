@@ -6,7 +6,7 @@ import { Minus, Plus, Search, X } from "lucide-react";
 type Point = { x: number; y: number };
 type Layer = { x: number; y: number; width: number; height: number; opacity: number; visible: boolean };
 type Plan = { id: string; name: string; sortOrder?: number; masterPlanUrl?: string | null; droneUrl?: string | null; points?: string | null; layerGeometry?: any };
-type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; direction: string; model: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
+type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; areaSqFt: number | null; direction: string; notes: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
 
 const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const parse = (s: string): Point[] => s.trim().split(/\s+/).filter(Boolean).map(v => v.split(",").map(Number)).filter(v => Number.isFinite(v[0]) && Number.isFinite(v[1])).map(([x, y]) => ({ x, y }));
@@ -88,7 +88,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
         setLots((d.lots || []).map((l: any) => ({
           id: l.id, number: l.number, status: l.status || "available",
           owner: l.owner || "", price: l.price, area: l.area ?? null,
-          direction: l.direction || "", model: l.details || l.model || "",
+          direction: l.direction || "", notes: l.details || l.model || "", areaSqFt: l.areaSqFt ?? null,
           points: typeof l.points === "string" ? l.points : "",
           labelX: Number(l.labelX || 0), labelY: Number(l.labelY || 0),
           sectionId: l.sectionId || null,
@@ -125,9 +125,15 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
 
   function onPointerDown(e: React.PointerEvent<SVGSVGElement>) {
     if (e.button !== 0) return;
-    setSelected(null);
     setDrag({ start: { x: e.clientX, y: e.clientY }, panStart: { ...pan } });
     e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    if (!drag) return;
+    const dx = e.clientX - drag.start.x, dy = e.clientY - drag.start.y;
+    if (Math.abs(dx) < 4 && Math.abs(dy) < 4) setSelected(null); // tap on canvas = deselect
+    setDrag(null);
   }
 
   function onPointerMove(e: React.PointerEvent<SVGSVGElement>) {
@@ -237,7 +243,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           preserveAspectRatio="xMinYMin meet"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={() => setDrag(null)}
+          onPointerUp={onPointerUp}
           onPointerCancel={() => setDrag(null)}
           onWheel={e => { e.preventDefault(); const delta = e.deltaY > 0 ? 1/1.15 : 1.15; setZoom(z => Math.min(8, Math.max(.25, +(z * delta).toFixed(2)))); }}
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", touchAction: "none", cursor: drag ? "grabbing" : "grab" }}
@@ -258,7 +264,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
             const isFiltered = !filteredIds.has(lot.id) && (filterStatus !== "all" || filterSearch.trim());
             const col = statusColor(lot.status);
             return (
-              <g key={lot.id} onClick={e => { e.stopPropagation(); focusLot(lot); }} style={{ cursor: "pointer" }}>
+              <g key={lot.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); focusLot(lot); }} style={{ cursor: "pointer" }}>
                 <polygon
                   points={stringify(q)}
                   fill={isSelected ? col.fill.replace(/[\d.]+\)$/, ".45)") : isFiltered ? "rgba(203,213,225,.15)" : col.fill}
@@ -301,8 +307,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
                   ["Area",       selectedLot.area      != null ? `${selectedLot.area} sq.yd`  : null],
                   ["Price",      selectedLot.price     != null ? `₹ ${selectedLot.price}`     : null],
                   ["Direction",  selectedLot.direction || null],
-                  ["Model",      selectedLot.model     || null],
                   ["Owner",      selectedLot.owner     || null],
+                  ["Notes",      selectedLot.notes     || null],
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label as string}>
                     <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: .7, color: "#94a3b8", marginBottom: 3 }}>{label as string}</div>

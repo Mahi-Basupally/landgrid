@@ -18,12 +18,15 @@ export default async function PublicProjectPage({ params }: Props) {
     .maybeSingle();
   if (error || !project) notFound();
 
+  const user = await getUserFromSession((await cookies()).get('landgrid_user')?.value);
+
   if (!project.is_public) {
-    const user = await getUserFromSession((await cookies()).get('landgrid_user')?.value);
     if (!user) redirect('/login');
     const role = await getMembership(user.id, project.slug);
     if (!role && project.created_by !== user.id) notFound();
   }
 
-  return <PlotViewerShell projectSlug={project.slug} projectName={project.name} />;
+  const isLoggedIn = Boolean(user);
+
+  return <PlotViewerShell projectSlug={project.slug} projectName={project.name} isLoggedIn={isLoggedIn} />;
 }
