@@ -18,14 +18,13 @@ export default async function PublicProjectPage({ params }: Props) {
   if (error || !project) notFound();
 
   const user = await getCurrentUser();
+  const role = user ? await getMembership(user.id, project.slug) : null;
 
-  if (!project.is_public) {
+  // Public projects are viewable by anyone, but management remains member-only.
+  if (!project.is_public && !role) {
     if (!user) redirect('/login');
-    const role = await getMembership(user.id, project.slug);
-    if (!role && project.created_by !== user.id) notFound();
+    notFound();
   }
 
-  const isLoggedIn = Boolean(user);
-
-  return <PlotViewerShell projectSlug={project.slug} projectName={project.name} isLoggedIn={isLoggedIn} />;
+  return <PlotViewerShell projectSlug={project.slug} projectName={project.name} isLoggedIn={Boolean(user)} />;
 }
