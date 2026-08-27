@@ -344,13 +344,42 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
               </div>
 
               {/* Fields */}
-              <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
+              <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
+
+                {/* Dimension + Area calculation card */}
+                {(selectedLot.lengthM || selectedLot.widthM || selectedLot.area) && (
+                  <div style={{ padding: "10px 12px", borderRadius: 8, background: "#f0f9ff", border: "1px solid #bae6fd" }}>
+                    <div style={{ fontSize: 10, fontWeight: 900, color: "#0369a1", marginBottom: 6, letterSpacing: .7 }}>DIMENSIONS & AREA</div>
+                    {selectedLot.lengthM && selectedLot.widthM && (
+                      <div style={{ fontSize: 13, color: "#334155", marginBottom: 4 }}>
+                        {convertDim(selectedLot.lengthM)}{viewUnit} × {convertDim(selectedLot.widthM)}{viewUnit}
+                        {" = "}
+                        <b>{+(selectedLot.lengthM * selectedLot.widthM).toFixed(2)} sq.m</b>
+                      </div>
+                    )}
+                    {selectedLot.area != null && (
+                      <div style={{ fontSize: 15, fontWeight: 900, color: "#172554" }}>
+                        {selectedLot.area} sq.yd
+                        {selectedLot.areaSqFt != null && (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginLeft: 8 }}>
+                            · {selectedLot.areaSqFt} sq.ft
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {selectedLot.lengthM && selectedLot.widthM && (
+                      <div style={{ fontSize: 10, color: "#64748b", marginTop: 5 }}>
+                        sq.yd = sq.m × 1.196 · sq.ft = sq.m × 10.764
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {[
-                  ["Area",       selectedLot.area      != null ? `${selectedLot.area} sq.yd`  : null],
-                  ["Price",      selectedLot.price     != null ? `₹ ${selectedLot.price}`     : null],
-                  ["Direction",  selectedLot.direction || null],
-                  ["Owner",      selectedLot.owner     || null],
-                  ["Notes",      selectedLot.notes     || null],
+                  ["Price",     selectedLot.price     != null ? `₹ ${selectedLot.price}` : null],
+                  ["Direction", selectedLot.direction || null],
+                  ["Owner",     selectedLot.owner     || null],
+                  ["Notes",     selectedLot.notes     || null],
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label as string}>
                     <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: .7, color: "#94a3b8", marginBottom: 3 }}>{label as string}</div>
