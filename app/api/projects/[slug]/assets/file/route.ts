@@ -80,8 +80,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     let data: Blob | null = null;
     let resolvedPath = parsed.path;
     let lastError: any = null;
+    console.log('[assets/file] trying candidates:', JSON.stringify(candidates));
     for (const candidate of candidates) {
       const result = await db.storage.from(candidate.bucket).download(candidate.path);
+      console.log(`[assets/file] bucket=${candidate.bucket} path=${candidate.path} ok=${!!result.data} err=${result.error?.message}`);
       if (result.data) { data = result.data; resolvedPath = candidate.path; break; }
       lastError = result.error;
     }
