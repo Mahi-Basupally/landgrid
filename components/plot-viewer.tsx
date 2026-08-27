@@ -44,7 +44,6 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [viewUnit, setViewUnit] = useState<"m"|"ft"|"yd">("m");
-  const [labelMode, setLabelMode] = useState<"number"|"dims"|"both">("number");
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   function convertDim(m: number) {
@@ -53,7 +52,30 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     return +m.toFixed(2);
   }
   function dimStr(m: number | null) { if (!m) return ""; if (viewUnit === "ft") return `${+(m * 3.28084).toFixed(1)}ft`; if (viewUnit === "yd") return `${+(m * 1.09361).toFixed(1)}yd`; return `${+m.toFixed(2)}m`; }
-  function lotLabel(lot: Lot) { const dims = (lot.lengthM && lot.widthM) ? `${dimStr(lot.lengthM)}×${dimStr(lot.widthM)}` : ""; if (labelMode === "dims") return dims || lot.number; if (labelMode === "both") return dims ? `${lot.number}\n${dims}` : lot.number; return lot.number; }
+  function edgeLenM(a: {x:number;y:number}, b: {x:number;y:number}) { return Math.sqrt((b.x-a.x)**2+(b.y-a.y)**2); }
+  function renderLotAnnotations(q: {x:number;y:number}[], lot: Lot, z: number, isSelected: boolean) {
+    const c = { x: q.reduce((s,p)=>s+p.x,0)/q.length, y: q.reduce((s,p)=>s+p.y,0)/q.length };
+    const sqYd = lot.area != null ? Number(lot.area) : null;
+    const lm = lot.lengthM, wm = lot.widthM;
+    const edges = q.map((pt, i) => { const next = q[(i+1)%q.length]; return { a: pt, b: next, len: edgeLenM(pt, next), mx: (pt.x+next.x)/2, my: (pt.y+next.y)/2, angle: Math.atan2(next.y-pt.y, next.x-pt.x)*180/Math.PI }; });
+    const sorted = [...edges].sort((a,b) => b.len-a.len).slice(0,4);
+    const fs = 16/z, offset = 20/z;
+    return <>
+      <text x={c.x} y={sqYd!=null ? c.y - 16/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={20/z} fontWeight={900} pointerEvents="none" fill="#172033" paintOrder="stroke" stroke="white" strokeWidth={4/z}>{lot.number}</text>
+      {sqYd!=null && <text x={c.x} y={c.y+13/z} textAnchor="middle" dominantBaseline="middle" fontSize={13/z} fontWeight={700} pointerEvents="none" fill="#475569" paintOrder="stroke" stroke="white" strokeWidth={3/z}>{sqYd} sq.yd</text>}
+      {isSelected && (lm||wm) && sorted.map((e,i) => {
+        const perpAngle = e.angle+90;
+        const px2 = e.mx+Math.cos(perpAngle*Math.PI/180)*offset, py2 = e.my+Math.sin(perpAngle*Math.PI/180)*offset;
+        const px = i%2===0?px2:e.mx-Math.cos(perpAngle*Math.PI/180)*offset;
+        const py = i%2===0?py2:e.my-Math.sin(perpAngle*Math.PI/180)*offset;
+        const storedDim = i<2 ? (i===0?(lm&&wm?Math.max(lm,wm):null):(lm&&wm?Math.min(lm,wm):null)) : null;
+        const label = storedDim ? dimStr(storedDim) : null;
+        if (!label) return null;
+        let rot = e.angle; if (rot>90) rot-=180; if (rot<-90) rot+=180;
+        return <text key={i} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fontWeight={800} pointerEvents="none" fill="#1e40af" paintOrder="stroke" stroke="rgba(255,255,255,.95)" strokeWidth={3/z} transform={`rotate(${rot},${px},${py})`}>{label}</text>;
+      })}
+    </>;
+  }
 
   const master = plans.find(p => p.id === "master_plan") || plans[0];
   const sectionList = useMemo(() => plans.filter(p => p.id !== "master_plan"), [plans]);
@@ -157,9 +179,13 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   function focusLot(lot: Lot) {
     const q = normalize(parse(lot.points));
     const c = center(q);
+    const pts = q;
+    const minX = Math.min(...pts.map(p=>p.x)), maxX = Math.max(...pts.map(p=>p.x));
+    const minY = Math.min(...pts.map(p=>p.y)), maxY = Math.max(...pts.map(p=>p.y));
+    const targetZoom = Math.min(6, Math.max(1.5, Math.min(W/(Math.max(1,maxX-minX)*2), H/(Math.max(1,maxY-minY)*2))));
     setSelected(lot.id);
     setPlanId(lot.sectionId || "master_plan");
-    setZoom(3);
+    setZoom(targetZoom);
     setPan({ x: c.x - W / 2, y: c.y - H / 2 });
   }
 
@@ -281,7 +307,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
                   strokeWidth={isSelected ? 4 : 2}
                   opacity={isFiltered ? .35 : 1}
                 />
-                {(() => { const lbl = lotLabel(lot); const fill = isFiltered ? "#94a3b8" : "#172033"; if (!lbl.includes("\n")) return <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize={22} fontWeight={800} pointerEvents="none" fill={fill} paintOrder="stroke" stroke="white" strokeWidth={5}>{lbl}</text>; const [line1, line2] = lbl.split("\n"); return <><text x={c.x} y={c.y - 13} textAnchor="middle" dominantBaseline="middle" fontSize={20} fontWeight={900} pointerEvents="none" fill={fill} paintOrder="stroke" stroke="white" strokeWidth={4}>{line1}</text><text x={c.x} y={c.y + 13} textAnchor="middle" dominantBaseline="middle" fontSize={15} fontWeight={700} pointerEvents="none" fill={isFiltered ? "#94a3b8" : "#475569"} paintOrder="stroke" stroke="white" strokeWidth={4}>{line2}</text></>; })()}
+                {renderLotAnnotations(q, lot, zoom, isSelected)}
               </g>
             );
           })}
