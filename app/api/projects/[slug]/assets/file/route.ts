@@ -1,28 +1,41 @@
 import { NextResponse } from 'next/server';
+import { getCurrentUser, getMembership } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function normalizeSlug(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+function normalizeSlug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
-function storagePath(value: string) {
+function parseStorage(value: string) {
   const raw = value.trim();
-  if (raw.startsWith('storage://')) return decodeURIComponent(raw.slice('storage://'.length).replace(/^\/+/, ''));
-  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return decodeURIComponent(raw.replace(/^\/+/, ''));
-  const marker = '/project-assets/';
-  const index = raw.indexOf(marker);
-  return index >= 0 ? decodeURIComponent(raw.slice(index + marker.length).split('?')[0]) : null;
+  if (raw.startsWith('storage://')) {
+    const stored = decodeURIComponent(raw.slice('storage://'.length).replace(/^\/+/, ''));
+    // storage://bucket/path is the canonical format used by LandGrid.
+    const slash = stored.indexOf('/');
+    if (slash > 0) return { bucket: stored.slice(0, slash), path: stored.slice(slash + 1) };
+    return { bucket: 'project-assets', path: stored };
+  }
+  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return { bucket: 'project-assets', path: decodeURIComponent(raw.replace(/^\/+/, '')) };
+  const marker = '/storage/v1/object/';
+  const markerIndex = raw.indexOf(marker);
+  if (markerIndex >= 0) {
+    const rest = raw.slice(markerIndex + marker.length).replace(/^\//, '');
+    const parts = rest.split('/');
+    if (parts[0] === 'public' || parts[0] === 'authenticated') parts.shift();
+    if (parts.length >= 2) return { bucket: decodeURIComponent(parts[0]), path: decodeURIComponent(parts.slice(1).join('/').split('?')[0]) };
+  }
+  const fallbackMarker = '/project-assets/';
+  const index = raw.indexOf(fallbackMarker);
+  return index >= 0 ? { bucket: 'project-assets', path: decodeURIComponent(raw.slice(index + fallbackMarker.length).split('?')[0]) } : null;
 }
 
 async function findProject(slug: string) {
   const db = supabaseAdmin();
-  const { data: exact, error: exactError } = await db.from('projects').select('id,slug').eq('slug', slug).maybeSingle();
+  const { data: exact, error: exactError } = await db.from('projects').select('id,slug,is_public').eq('slug', slug).maybeSingle();
   if (exactError) throw exactError;
   if (exact) return exact;
-  const { data: projects, error } = await db.from('projects').select('id,slug');
+  const { data: projects, error } = await db.from('projects').select('id,slug,is_public');
   if (error) throw error;
   return (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(slug)) || null;
 }
@@ -38,24 +51,36 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
     const project = await findProject(slug);
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    if (!project.is_public) {
+      const user = await getCurrentUser();
+      if (!user || !(await getMembership(user.id, project.slug))) return NextResponse.json({ error: 'You do not have access to this project.' }, { status: 403 });
+    }
 
-    const { data: plan, error: planError } = await supabaseAdmin()
-      .from('project_site_plans')
-      .select('map_url,drone_url')
-      .eq('project_id', project.id)
-      .eq('plan_type', planType)
-      .maybeSingle();
+    const db = supabaseAdmin();
+    const { data: plan, error: planError } = await db.from('project_site_plans').select('map_url,drone_url').eq('project_id', project.id).eq('plan_type', planType).maybeSingle();
     if (planError) return NextResponse.json({ error: planError.message }, { status: 500 });
-
     const value = kind === 'master-plan' ? plan?.map_url : plan?.drone_url;
     if (!value) return NextResponse.json({ error: 'Asset not configured' }, { status: 404 });
-    const path = storagePath(value);
-    if (!path) return NextResponse.json({ error: 'Invalid stored asset path' }, { status: 500 });
 
-    const { data, error } = await supabaseAdmin().storage.from('project-assets').download(path);
-    if (error || !data) return NextResponse.json({ error: error?.message || `Asset not found: ${path}` }, { status: 404 });
+    const parsed = parseStorage(value);
+    if (!parsed) return NextResponse.json({ error: 'Invalid stored asset path' }, { status: 500 });
 
-    const lower = path.toLowerCase();
+    // Older records used project-assets/<path>, while current records use storage://projects/<path>.
+    const candidates = [{ bucket: parsed.bucket, path: parsed.path }];
+    if (parsed.bucket === 'projects') candidates.push({ bucket: 'project-assets', path: parsed.path });
+    if (parsed.bucket === 'project-assets') candidates.push({ bucket: 'projects', path: parsed.path });
+
+    let data: Blob | null = null;
+    let resolvedPath = parsed.path;
+    let lastError: any = null;
+    for (const candidate of candidates) {
+      const result = await db.storage.from(candidate.bucket).download(candidate.path);
+      if (result.data) { data = result.data; resolvedPath = candidate.path; break; }
+      lastError = result.error;
+    }
+    if (!data) return NextResponse.json({ error: lastError?.message || `Asset not found: ${parsed.bucket}/${parsed.path}` }, { status: 404 });
+
+    const lower = resolvedPath.toLowerCase();
     const contentType = lower.endsWith('.svg') ? 'image/svg+xml' : lower.endsWith('.png') ? 'image/png' : lower.endsWith('.jpg') || lower.endsWith('.jpeg') ? 'image/jpeg' : lower.endsWith('.webp') ? 'image/webp' : data.type || 'application/octet-stream';
     return new NextResponse(data, { status: 200, headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=300, must-revalidate', 'Content-Disposition': 'inline' } });
   } catch (error) {
