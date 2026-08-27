@@ -22,10 +22,9 @@ export async function middleware(request: NextRequest) {
   );
 
   const { data: { user } } = await supabase.auth.getUser();
-
   const { pathname } = request.nextUrl;
 
-  // Public routes — no auth needed
+  // Public routes — no auth needed.
   const isPublic =
     pathname === '/' ||
     pathname === '/login' ||
@@ -34,17 +33,25 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon');
 
-  // Public project view — no auth needed (page handles is_public check)
+  // Public project viewer. The project page and plan API perform the
+  // actual is_public/member authorization; middleware must not redirect
+  // an anonymous visitor to /login before those checks can run.
   const isProjectView = /^\/projects\/[^/]+$/.test(pathname);
 
-  if (!isPublic && !isProjectView && !user) {
+  // Public viewer data endpoints. Their route handlers are responsible for
+  // deciding whether the project is public or the requester is a member.
+  const isPublicProjectApi =
+    /^\/api\/projects\/[^/]+\/plan$/.test(pathname) ||
+    /^\/api\/projects\/[^/]+\/assets\/file$/.test(pathname);
+
+  if (!isPublic && !isProjectView && !isPublicProjectApi && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
     return NextResponse.redirect(url);
   }
 
-  // Redirect logged-in users away from login page
+  // Redirect logged-in users away from login page.
   if (pathname === '/login' && user) {
     const url = request.nextUrl.clone();
     url.pathname = '/projects';
