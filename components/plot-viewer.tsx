@@ -68,7 +68,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
         const px2 = e.mx+Math.cos(perpAngle*Math.PI/180)*offset, py2 = e.my+Math.sin(perpAngle*Math.PI/180)*offset;
         const px = i%2===0?px2:e.mx-Math.cos(perpAngle*Math.PI/180)*offset;
         const py = i%2===0?py2:e.my-Math.sin(perpAngle*Math.PI/180)*offset;
-        const storedDim = i<2 ? (i===0?(lm&&wm?Math.max(lm,wm):null):(lm&&wm?Math.min(lm,wm):null)) : null;
+        if (i >= 2) return null;
+        const storedDim = lm && wm ? (i === 0 ? lm : wm) : (lm || wm || null);
         const label = storedDim ? dimStr(storedDim) : null;
         if (!label) return null;
         let rot = e.angle; if (rot>90) rot-=180; if (rot<-90) rot+=180;

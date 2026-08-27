@@ -158,9 +158,20 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
         const px = i%2===0 ? px2 : e.mx - Math.cos(perpAngle*Math.PI/180)*offset;
         const py = i%2===0 ? py2 : e.my - Math.sin(perpAngle*Math.PI/180)*offset;
         // Use stored dims for the two longest edges; pixel length for others
-        const isLong = i < 2;
-        const storedDim = isLong ? (i===0 ? (lm && wm ? Math.max(lm,wm) : null) : (lm && wm ? Math.min(lm,wm) : null)) : null;
-        const label = storedDim ? dimStr(storedDim) : dimStr(e.len * (lm && wm ? (lm+wm)/(2*edgeLenM(q[0],q[1])||1) : 1) || null);
+        if (i >= 2) return null;
+        // Assign dims by matching pixel edge ratio to stored dim ratio
+        // longer pixel edge gets the dim it's proportionally closer to
+        let storedDim: number | null = null;
+        if (lm && wm) {
+          const longEdge = sorted[0].len, shortEdge = sorted[1].len;
+          // which stored dim is closer to longEdge proportionally?
+          const diffLmLong = Math.abs(longEdge / (longEdge + shortEdge) - lm / (lm + wm));
+          const diffWmLong = Math.abs(longEdge / (longEdge + shortEdge) - wm / (lm + wm));
+          const longDim = diffLmLong <= diffWmLong ? lm : wm;
+          const shortDim = diffLmLong <= diffWmLong ? wm : lm;
+          storedDim = i === 0 ? longDim : shortDim;
+        } else { storedDim = lm || wm || null; }
+        const label = storedDim ? dimStr(storedDim) : null;
         if (!label) return null;
         let rot = e.angle; if (rot > 90) rot -= 180; if (rot < -90) rot += 180;
         return <text key={i} x={px} y={py} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fontWeight={800} pointerEvents="none" fill="#1e40af" paintOrder="stroke" stroke="rgba(255,255,255,.95)" strokeWidth={3/z} transform={`rotate(${rot},${px},${py})`}>{label}</text>;
