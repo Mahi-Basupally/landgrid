@@ -6,7 +6,7 @@ import { Minus, Plus, Search, X } from "lucide-react";
 type Point = { x: number; y: number };
 type Layer = { x: number; y: number; width: number; height: number; opacity: number; visible: boolean };
 type Plan = { id: string; name: string; sortOrder?: number; masterPlanUrl?: string | null; droneUrl?: string | null; points?: string | null; layerGeometry?: any };
-type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; areaSqFt: number | null; direction: string; notes: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
+type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; areaSqFt: number | null; lengthM: number | null; widthM: number | null; direction: string; notes: string; points: string; labelX: number; labelY: number; sectionId?: string | null };
 
 const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const parse = (s: string): Point[] => s.trim().split(/\s+/).filter(Boolean).map(v => v.split(",").map(Number)).filter(v => Number.isFinite(v[0]) && Number.isFinite(v[1])).map(([x, y]) => ({ x, y }));
@@ -88,7 +88,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
         setLots((d.lots || []).map((l: any) => ({
           id: l.id, number: l.number, status: l.status || "available",
           owner: l.owner || "", price: l.price, area: l.area ?? null,
-          direction: l.direction || "", notes: l.details || l.model || "", areaSqFt: l.areaSqFt ?? null,
+          direction: l.direction || "", notes: l.details || l.model || "", areaSqFt: l.areaSqFt ?? null, lengthM: l.lengthM ?? null, widthM: l.widthM ?? null,
           points: typeof l.points === "string" ? l.points : "",
           labelX: Number(l.labelX || 0), labelY: Number(l.labelY || 0),
           sectionId: l.sectionId || null,
