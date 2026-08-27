@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getMembership, getUserFromSession, getUserById, readMemberships, upsertUser, Role } from '@/lib/auth';
+import { getMembership, getCurrentUser, getUserById, readMemberships, upsertUser, Role } from '@/lib/auth';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-async function currentUser() { return getUserFromSession((await cookies()).get('landgrid_user')?.value); }
+async function currentUser() { return getCurrentUser(); }
 function normalizeSlug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 async function findProject(slug: string) {
   const db = supabaseAdmin();

@@ -1,74 +1,80 @@
-import crypto from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { createServerSupabase } from '@/lib/supabaseServer';
+import { NextResponse } from 'next/server';
 
 export type Role = 'admin' | 'sales';
 export type User = { id: string; email: string; name?: string };
+
+// ── Get current user from Supabase session (server components / API routes) ──
+export async function getCurrentUser(): Promise<User | null> {
+  try {
+    const supabase = await createServerSupabase();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
+    // Sync to users table
+    await supabaseAdmin()
+      .from('users')
+      .upsert({ id: user.id, email: user.email!, name: user.user_metadata?.full_name || null },
+               { onConflict: 'id' });
+    return { id: user.id, email: user.email!, name: user.user_metadata?.full_name };
+  } catch { return null; }
+}
+
+// ── Legacy: used in server page components via cookies ──
+export async function getUserFromSession(_token: string | undefined): Promise<User | null> {
+  return getCurrentUser();
+}
+
+// ── Used by API routes that need a Supabase session ──
+export async function getCurrentUserFromRequest(_req: Request): Promise<User | null> {
+  return getCurrentUser();
+}
+
+// ── Get role for a user on a project ──
+export async function getMembership(userId: string, projectSlug: string): Promise<Role | null> {
+  const { data } = await supabaseAdmin()
+    .from('project_members')
+    .select('role,projects!inner(slug)')
+    .eq('user_id', userId)
+    .eq('projects.slug', projectSlug)
+    .maybeSingle();
+  return (data?.role as Role) || null;
+}
+
+// ── requireAdmin: used in API POST/PUT/DELETE routes ──
+export async function requireAdmin(slug: string) {
+  const user = await getCurrentUser();
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorised' }, { status: 401 }) };
+
+  const db = supabaseAdmin();
+  const { data: project } = await db.from('projects').select('id,slug,name,created_by').eq('slug', slug).maybeSingle();
+  if (!project) return { error: NextResponse.json({ error: 'Project not found' }, { status: 404 }) };
+
+  const isCreator = project.created_by === user.id;
+  const role = await getMembership(user.id, slug);
+  if (!isCreator && role !== 'admin') {
+    return { error: NextResponse.json({ error: 'Admin access required' }, { status: 403 }) };
+  }
+  return { user, project, role: isCreator ? 'admin' : role };
+}
+
+// ── Upsert user from auth (called after OAuth) ──
+export async function upsertUser(email: string, id?: string, name?: string): Promise<User> {
+  const db = supabaseAdmin();
+  if (id) {
+    await db.from('users').upsert({ id, email, name: name || null }, { onConflict: 'id' });
+    return { id, email, name };
+  }
+  const { data } = await db.from('users').select('id,email,name').eq('email', email).maybeSingle();
+  if (data) return data;
+  const { data: inserted } = await db.from('users').insert({ email }).select('id,email,name').single();
+  return inserted!;
+}
+
 export type Membership = { userId: string; projectSlug: string; role: Role };
 
-const SESSION_COOKIE = 'landgrid_user';
-const SESSION_DAYS = 30;
-
-export function appConfig() {
-  return { LANDGRID_LOGIN_CODE: process.env.LANDGRID_LOGIN_CODE || '123456' };
-}
-
-export function loginCode() {
-  return process.env.LANDGRID_LOGIN_CODE || appConfig().LANDGRID_LOGIN_CODE;
-}
-
-function hashToken(token: string) {
-  return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-export async function findUserByEmail(email: string): Promise<User | null> {
-  const { data, error } = await supabaseAdmin().from('users').select('id,email,name').eq('email', email).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-export async function getUserById(id: string): Promise<User | null> {
-  const { data, error } = await supabaseAdmin().from('users').select('id,email,name').eq('id', id).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-export async function upsertUser(email: string): Promise<User> {
-  const existing = await findUserByEmail(email);
-  if (existing) return existing;
-  const { data, error } = await supabaseAdmin().from('users').insert({ email }).select('id,email,name').single();
-  if (error) throw error;
-  return data;
-}
-
-export async function createSession(userId: string) {
-  const token = crypto.randomBytes(32).toString('hex');
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  const { error } = await supabaseAdmin().from('auth_sessions').insert({ token_hash: hashToken(token), user_id: userId, expires_at: expiresAt });
-  if (error) throw error;
-  return { token, expiresAt };
-}
-
-export async function getUserFromSession(token: string | undefined): Promise<User | null> {
-  if (!token) return null;
-  const { data, error } = await supabaseAdmin().from('auth_sessions').select('user_id,expires_at,users(id,email,name)').eq('token_hash', hashToken(token)).maybeSingle();
-  if (error) throw error;
-  if (!data || new Date(data.expires_at).getTime() <= Date.now()) return null;
-  return Array.isArray(data.users) ? data.users[0] || null : data.users;
-}
-
-export async function getCurrentUserFromRequest(req: Request) {
-  const cookie = req.headers.get('cookie') || '';
-  const token = cookie.split(';').map(v => v.trim()).find(v => v.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
-  return getUserFromSession(token);
-}
-
-export function sessionCookie(token: string, expiresAt: string) {
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_DAYS * 24 * 60 * 60}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
-}
-
 export async function readMemberships(): Promise<Membership[]> {
-  const { data, error } = await supabaseAdmin().from('project_members').select('user_id,projects!inner(slug),role');
-  if (error) throw error;
+  const { data } = await supabaseAdmin().from('project_members').select('user_id,projects!inner(slug),role');
   return (data || []).map((m: any) => ({ userId: m.user_id, projectSlug: m.projects.slug, role: m.role }));
 }
 
@@ -76,10 +82,22 @@ export async function writeMemberships(_value: Membership[]) {
   throw new Error('Use project member APIs to change memberships.');
 }
 
-export async function getMembership(userId: string, projectSlug: string): Promise<Role | null> {
-  const { data, error } = await supabaseAdmin().from('project_members').select('role,projects!inner(slug)').eq('user_id', userId).eq('projects.slug', projectSlug).maybeSingle();
-  if (error) throw error;
-  return data?.role || null;
+// Legacy exports kept for compatibility
+export const SESSION_COOKIE = 'sb-access-token';
+export function sessionCookie(_token: string, _expiresAt: string) { return ''; }
+export function loginCode() { return process.env.LANDGRID_LOGIN_CODE || '123456'; }
+
+// Legacy exports for backward compatibility
+export async function getUserById(id: string): Promise<User | null> {
+  const { data } = await supabaseAdmin().from('users').select('id,email,name').eq('id', id).maybeSingle();
+  return data;
 }
 
-export { SESSION_COOKIE };
+export async function findUserByEmail(email: string): Promise<User | null> {
+  const { data } = await supabaseAdmin().from('users').select('id,email,name').eq('email', email).maybeSingle();
+  return data;
+}
+
+export async function createSession(_userId: string) {
+  return { token: '', expiresAt: '' };
+}

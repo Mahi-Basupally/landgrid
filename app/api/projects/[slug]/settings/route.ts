@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getUserFromSession, getMembership } from '@/lib/auth';
+import { getCurrentUser, getMembership } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
-async function currentUser() {
-  const cookieStore = await cookies();
-  return getUserFromSession(cookieStore.get('landgrid_user')?.value);
-}
+async function currentUser() { return getCurrentUser(); }
 
 async function findProject(slug: string) {
   const db = supabaseAdmin();

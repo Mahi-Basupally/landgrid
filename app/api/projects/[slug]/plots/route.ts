@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { getMembership, getUserFromSession } from '@/lib/auth';
+import { getMembership, getCurrentUser } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export const dynamic = 'force-dynamic';
 
 async function access(slug: string) {
-  const token = (await cookies()).get('landgrid_user')?.value;
-  const user = await getUserFromSession(token);
+  const user = await getCurrentUser();
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   const db = supabaseAdmin();
   const { data: project, error } = await db.from('projects').select('id,slug,created_by').eq('slug', slug).maybeSingle();

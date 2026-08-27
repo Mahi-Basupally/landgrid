@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { getUserFromSession, getMembership } from '@/lib/auth';
+import { getCurrentUser, getMembership } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import sharp from 'sharp';
 
@@ -30,8 +29,7 @@ function validPlanType(value: string) {
 export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   try {
     const { slug } = await params;
-    const token = (await cookies()).get('landgrid_user')?.value;
-    const user = await getUserFromSession(token);
+    const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const project = await findProject(slug);

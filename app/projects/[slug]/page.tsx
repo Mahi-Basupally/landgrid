@@ -1,6 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { getUserFromSession, getMembership } from '@/lib/auth';
+import { getCurrentUser, getMembership } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import PlotViewerShell from '@/components/plot-viewer-shell';
 
@@ -18,7 +17,7 @@ export default async function PublicProjectPage({ params }: Props) {
     .maybeSingle();
   if (error || !project) notFound();
 
-  const user = await getUserFromSession((await cookies()).get('landgrid_user')?.value);
+  const user = await getCurrentUser();
 
   if (!project.is_public) {
     if (!user) redirect('/login');

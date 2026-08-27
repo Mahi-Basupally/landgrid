@@ -1,6 +1,5 @@
 import { redirect, notFound } from 'next/navigation';
-import { cookies } from 'next/headers';
-import { getUserFromSession, getMembership, getUserById, readMemberships } from '@/lib/auth';
+import { getCurrentUser, getMembership, getUserById, readMemberships } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import SettingsClient from './settings-client';
 
@@ -9,8 +8,7 @@ function normalizeSlug(value: string) { return value.toLowerCase().replace(/[^a-
 
 export default async function ProjectSettingsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug: requestedSlug } = await params;
-  const token = (await cookies()).get('landgrid_user')?.value;
-  const user = await getUserFromSession(token);
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
   const db = supabaseAdmin();
   const { data: exact } = await db.from('projects').select('id,slug,name,address,description,google_location_url,is_public,created_by,created_at').eq('slug', requestedSlug).maybeSingle();

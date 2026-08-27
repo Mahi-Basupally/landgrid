@@ -25,7 +25,10 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
   const displayName = projectName || (slug ? prettySlug(slug) : "");
 
   async function logout() {
-    try { await fetch("/api/auth/logout", { method: "POST" }); } finally { window.location.href = "/"; }
+    // POST triggers Supabase signOut + redirect to /login
+    const form = document.createElement('form');
+    form.method = 'POST'; form.action = '/api/auth/logout';
+    document.body.appendChild(form); form.submit();
   }
 
   return (
