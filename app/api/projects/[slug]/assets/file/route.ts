@@ -8,26 +8,34 @@ export const dynamic = 'force-dynamic';
 function normalizeSlug(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, ''); }
 
 function parseStorage(value: string) {
+  const BUCKET = 'project-assets';
   const raw = value.trim();
+
+  // storage://projects/<uuid>/plans/... → project-assets bucket, path = projects/<uuid>/plans/...
   if (raw.startsWith('storage://')) {
-    const stored = decodeURIComponent(raw.slice('storage://'.length).replace(/^\/+/, ''));
-    // storage://bucket/path is the canonical format used by LandGrid.
-    const slash = stored.indexOf('/');
-    if (slash > 0) return { bucket: stored.slice(0, slash), path: stored.slice(slash + 1) };
-    return { bucket: 'project-assets', path: stored };
+    const path = decodeURIComponent(raw.slice('storage://'.length).replace(/^\/+/, ''));
+    return { bucket: BUCKET, path };
   }
-  if (!raw.startsWith('http://') && !raw.startsWith('https://')) return { bucket: 'project-assets', path: decodeURIComponent(raw.replace(/^\/+/, '')) };
-  const marker = '/storage/v1/object/';
-  const markerIndex = raw.indexOf(marker);
-  if (markerIndex >= 0) {
-    const rest = raw.slice(markerIndex + marker.length).replace(/^\//, '');
-    const parts = rest.split('/');
-    if (parts[0] === 'public' || parts[0] === 'authenticated') parts.shift();
-    if (parts.length >= 2) return { bucket: decodeURIComponent(parts[0]), path: decodeURIComponent(parts.slice(1).join('/').split('?')[0]) };
+
+  // Full public URL: .../storage/v1/object/public/project-assets/projects/...
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    const marker = '/storage/v1/object/';
+    const markerIndex = raw.indexOf(marker);
+    if (markerIndex >= 0) {
+      const rest = raw.slice(markerIndex + marker.length).replace(/^\//, '');
+      const parts = rest.split('/');
+      if (parts[0] === 'public' || parts[0] === 'authenticated') parts.shift();
+      // parts[0] is bucket, rest is path
+      if (parts.length >= 2) return { bucket: decodeURIComponent(parts[0]), path: decodeURIComponent(parts.slice(1).join('/').split('?')[0]) };
+    }
+    // fallback: find /project-assets/ in URL
+    const fbIdx = raw.indexOf('/project-assets/');
+    if (fbIdx >= 0) return { bucket: BUCKET, path: decodeURIComponent(raw.slice(fbIdx + '/project-assets/'.length).split('?')[0]) };
+    return null;
   }
-  const fallbackMarker = '/project-assets/';
-  const index = raw.indexOf(fallbackMarker);
-  return index >= 0 ? { bucket: 'project-assets', path: decodeURIComponent(raw.slice(index + fallbackMarker.length).split('?')[0]) } : null;
+
+  // Bare path
+  return { bucket: BUCKET, path: decodeURIComponent(raw.replace(/^\/+/, '')) };
 }
 
 async function findProject(slug: string) {
@@ -72,10 +80,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     const parsed = parseStorage(value);
     if (!parsed) return NextResponse.json({ error: 'Invalid stored asset path' }, { status: 500 });
 
-    // Older records used project-assets/<path>, while current records use storage://projects/<path>.
     const candidates = [{ bucket: parsed.bucket, path: parsed.path }];
-    if (parsed.bucket === 'projects') candidates.push({ bucket: 'project-assets', path: parsed.path });
-    if (parsed.bucket === 'project-assets') candidates.push({ bucket: 'projects', path: parsed.path });
 
     let data: Blob | null = null;
     let resolvedPath = parsed.path;
