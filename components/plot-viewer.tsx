@@ -44,6 +44,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterSearch, setFilterSearch] = useState("");
   const [viewUnit, setViewUnit] = useState<"m"|"ft"|"yd">("m");
+  const [labelMode, setLabelMode] = useState<"number"|"dims"|"both">("number");
 
   const svgRef = useRef<SVGSVGElement | null>(null);
   function convertDim(m: number) {
@@ -51,6 +52,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     if (viewUnit === "yd") return +(m * 1.09361).toFixed(2);
     return +m.toFixed(2);
   }
+  function dimStr(m: number | null) { if (!m) return ""; if (viewUnit === "ft") return `${+(m * 3.28084).toFixed(1)}ft`; if (viewUnit === "yd") return `${+(m * 1.09361).toFixed(1)}yd`; return `${+m.toFixed(2)}m`; }
+  function lotLabel(lot: Lot) { const dims = (lot.lengthM && lot.widthM) ? `${dimStr(lot.lengthM)}×${dimStr(lot.widthM)}` : ""; if (labelMode === "dims") return dims || lot.number; if (labelMode === "both") return dims ? `${lot.number}\n${dims}` : lot.number; return lot.number; }
 
   const master = plans.find(p => p.id === "master_plan") || plans[0];
   const sectionList = useMemo(() => plans.filter(p => p.id !== "master_plan"), [plans]);
@@ -278,7 +281,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
                   strokeWidth={isSelected ? 4 : 2}
                   opacity={isFiltered ? .35 : 1}
                 />
-                <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize={22} fontWeight={800} pointerEvents="none" fill={isFiltered ? "#94a3b8" : "#172033"} paintOrder="stroke" stroke="white" strokeWidth={5}>{lot.number}</text>
+                {(() => { const lbl = lotLabel(lot); const fill = isFiltered ? "#94a3b8" : "#172033"; if (!lbl.includes("\n")) return <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize={22} fontWeight={800} pointerEvents="none" fill={fill} paintOrder="stroke" stroke="white" strokeWidth={5}>{lbl}</text>; const [line1, line2] = lbl.split("\n"); return <><text x={c.x} y={c.y - 13} textAnchor="middle" dominantBaseline="middle" fontSize={20} fontWeight={900} pointerEvents="none" fill={fill} paintOrder="stroke" stroke="white" strokeWidth={4}>{line1}</text><text x={c.x} y={c.y + 13} textAnchor="middle" dominantBaseline="middle" fontSize={15} fontWeight={700} pointerEvents="none" fill={isFiltered ? "#94a3b8" : "#475569"} paintOrder="stroke" stroke="white" strokeWidth={4}>{line2}</text></>; })()}
               </g>
             );
           })}
