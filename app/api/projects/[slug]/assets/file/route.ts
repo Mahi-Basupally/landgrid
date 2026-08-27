@@ -40,10 +40,10 @@ function parseStorage(value: string) {
 
 async function findProject(slug: string) {
   const db = supabaseAdmin();
-  const { data: exact, error: exactError } = await db.from('projects').select('id,slug,is_public').eq('slug', slug).maybeSingle();
+  const { data: exact, error: exactError } = await db.from('projects').select('id,slug,is_public,created_by').eq('slug', slug).maybeSingle();
   if (exactError) throw exactError;
   if (exact) return exact;
-  const { data: projects, error } = await db.from('projects').select('id,slug,is_public');
+  const { data: projects, error } = await db.from('projects').select('id,slug,is_public,created_by');
   if (error) throw error;
   return (projects || []).find((p) => normalizeSlug(p.slug) === normalizeSlug(slug)) || null;
 }
@@ -61,7 +61,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
     if (!project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     if (!project.is_public) {
       const user = await getCurrentUser();
-      if (!user || !(await getMembership(user.id, project.slug))) return NextResponse.json({ error: 'You do not have access to this project.' }, { status: 403 });
+      if (!user) return NextResponse.json({ error: 'You do not have access to this project.' }, { status: 403 });
+      const role = await getMembership(user.id, project.slug);
+      const isCreator = project.created_by === user.id;
+      if (!role && !isCreator) return NextResponse.json({ error: 'You do not have access to this project.' }, { status: 403 });
     }
 
     const db = supabaseAdmin();

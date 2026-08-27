@@ -50,7 +50,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ slug:
 
     // Delete DB records (cascade order)
     await db.from('plots').delete().eq('project_id', project.id);
-    await db.from('plot_owners').delete().eq('project_id', project.id);
+    await db.from('project_owners').delete().eq('project_id', project.id);
     await db.from('project_site_plans').delete().eq('project_id', project.id);
     await db.from('project_members').delete().eq('project_id', project.id);
     await db.from('project_sections').delete().eq('project_id', project.id);

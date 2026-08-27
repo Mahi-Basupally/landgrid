@@ -116,7 +116,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ slug: st
 
     const [plotsRes, ownersRes, plansRes, membersRes] = await Promise.all([
       db.from('plots').select('*').eq('project_id', project.id),
-      db.from('plot_owners').select('*').eq('project_id', project.id),
+      db.from('project_owners').select('*').eq('project_id', project.id),
       db.from('project_site_plans').select('*').eq('project_id', project.id),
       db.from('project_members').select('user_id,role').eq('project_id', project.id),
     ]);
