@@ -312,12 +312,16 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
         .pv-hint { font-size: 11px; color: #64748b; margin-left: auto; }
         .pv-fab { display: none; }
         .pv-bottom-bar { display: none; }
-        .pv-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 40px rgba(15,23,42,.18); transform: translateY(100%); transition: transform .3s cubic-bezier(.32,0,.67,0); max-height: 80vh; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
-        .pv-sheet.open { transform: translateY(0); transition: transform .3s cubic-bezier(.33,1,.68,1); }
+        .pv-sheet { display: none; }
+        .pv-overlay { display: none; }
+        @media (max-width: 767px) {
+          .pv-sheet { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: #fff; border-radius: 20px 20px 0 0; box-shadow: 0 -8px 40px rgba(15,23,42,.18); transform: translateY(100%); transition: transform .3s cubic-bezier(.32,0,.67,0); max-height: 80vh; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
+          .pv-sheet.open { transform: translateY(0); transition: transform .3s cubic-bezier(.33,1,.68,1); }
+          .pv-overlay { display: block; position: fixed; inset: 0; z-index: 45; background: rgba(15,23,42,.4); opacity: 0; pointer-events: none; transition: opacity .25s; }
+          .pv-overlay.open { opacity: 1; pointer-events: auto; }
+        }
         .pv-handle { width: 40px; height: 4px; background: #cbd5e1; border-radius: 2px; margin: 12px auto 4px; flex-shrink: 0; }
         .pv-sheet-body { flex: 1; overflow-y: auto; }
-        .pv-overlay { display: none; position: fixed; inset: 0; z-index: 45; background: rgba(15,23,42,.4); opacity: 0; pointer-events: none; transition: opacity .25s; }
-        .pv-overlay.open { opacity: 1; pointer-events: auto; display: block; }
         @media (max-width: 767px) {
           .pv { grid-template-columns: 1fr; }
           .pv-left, .pv-right { display: none; }
@@ -370,8 +374,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
                 : isFilt ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.18)";
               const strokeColor = isSel
                 ? "rgba(218,165,32,.85)"
-                : isFilt ? "rgba(148,163,184,.25)" : col.stroke;
-              const strokeW = isSel ? 3 : 1.5;
+                : "transparent";
+              const strokeW = isSel ? 3 : 0;
               const dotR = Math.max(4, Math.min(10, 60 / zoom));
               return (
                 <g key={lot.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); focusLot(lot); }} style={{ cursor: "pointer" }} opacity={isFilt ? 0.35 : 1}>
