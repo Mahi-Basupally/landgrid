@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, LogOut, MessageSquare, Settings } from "lucide-react";
+import { ArrowLeft, BarChart2, LogOut, MessageSquare, Settings } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
@@ -75,6 +75,11 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
         {isView && (
           <Link href="/projects" className="app-header-button app-back">
             <ArrowLeft size={15} /> Back to Projects
+          </Link>
+        )}
+        {(isEditor || isView || isSettings) && isLoggedIn && slug && (
+          <Link href={`/projects/${encodeURIComponent(slug)}/report`} className="app-icon-button" aria-label="Owners Report" title="Owners Report">
+            <BarChart2 size={16} />
           </Link>
         )}
         {(isEditor || isSettings || (isView && isLoggedIn)) && slug && (
