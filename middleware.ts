@@ -2,6 +2,19 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Skip auth entirely for these — returning early prevents any cookie interference
+  if (
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon') ||
+    pathname === '/' ||
+    pathname === '/login'
+  ) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -11,9 +24,7 @@ export async function middleware(request: NextRequest) {
       cookies: {
         getAll() { return request.cookies.getAll(); },
         setAll(cookiesToSet) {
-          // Set on request for downstream
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          // Rebuild response with updated cookies
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -23,25 +34,14 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // IMPORTANT: do not add any logic between createServerClient and getUser
-  // that could prevent cookies from being set correctly
   const { data: { user } } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
-  // Always public
-  const isPublic =
-    pathname === '/' ||
-    pathname === '/login' ||
-    pathname.startsWith('/api/auth/') ||
-    pathname.startsWith('/_next/') ||
-    pathname.startsWith('/favicon');
-
-  // Public project view (no auth needed)
+  // Public project view — no auth needed
   const isProjectView = /^\/projects\/[^/]+$/.test(pathname);
+  if (isProjectView) return supabaseResponse;
 
-  // Protect all other routes
-  if (!isPublic && !isProjectView && !user) {
+  // All other routes need auth
+  if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
@@ -49,7 +49,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Redirect logged-in users away from login
-  if (pathname === '/login' && user) {
+  if (pathname === '/login') {
     const url = request.nextUrl.clone();
     url.pathname = '/projects';
     return NextResponse.redirect(url);
