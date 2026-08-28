@@ -6,7 +6,7 @@ import { Filter, List, Minus, Plus, Search, X } from "lucide-react";
 type Point = { x: number; y: number };
 type Layer = { x: number; y: number; width: number; height: number; opacity: number; visible: boolean };
 type Plan = { id: string; name: string; masterPlanUrl?: string | null; droneUrl?: string | null; layerGeometry?: any };
-type Lot = { id: string; number: string; status: string; owner: string; price: number | string | null; area: number | string | null; areaSqFt: number | null; lengthM: number | null; widthM: number | null; direction: string; notes: string; points: string; sectionId?: string | null };
+type Lot = { id: string; number: string; status: string; ownerName?: string; price: number | string | null; area: number | string | null; areaSqFt: number | null; lengthM: number | null; widthM: number | null; direction: string; notes: string; points: string; sectionId?: string | null };
 
 const DEFAULT_W = 1600, DEFAULT_H = 1000;
 const parse = (s: string): Point[] => s.trim().split(/\s+/).filter(Boolean).map(v => { const [x, y] = v.split(",").map(Number); return { x, y }; }).filter(p => isFinite(p.x) && isFinite(p.y));
@@ -66,8 +66,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
         else setDroneL(l => ({ ...l, x: dx, y: dy, width: dw, height: dh, visible: true }));
         setPlans(d.sections || []);
         setLots((d.lots || []).map((l: any) => ({
-          id: l.id, number: l.number, status: l.status || "available",
-          owner: l.owner || "", price: l.price, area: l.area ?? null,
+          id: l.id, number: l.number, status: l.status || "available", ownerName: l.ownerId ? ((d.owners||[]).find((o: any) => o.id === l.ownerId)?.name || null) : null,
+           price: l.price, area: l.area ?? null,
           areaSqFt: l.areaSqFt ?? null, lengthM: l.lengthM ?? null, widthM: l.widthM ?? null,
           direction: l.direction || "", notes: l.details || l.notes || "",
           points: l.points || "", sectionId: l.sectionId || null,
@@ -89,7 +89,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   const planLots = useMemo(() => planId === "master_plan" ? lots : lots.filter(l => l.sectionId === planId), [lots, planId]);
   const filtered = useMemo(() => planLots.filter(l => {
     if (filterStatus !== "all" && l.status !== filterStatus) return false;
-    if (filterSearch.trim()) { const q = filterSearch.toLowerCase(); return l.number.includes(q) || (l.owner || "").toLowerCase().includes(q); }
+    if (filterSearch.trim()) { const q = filterSearch.toLowerCase(); return l.number.includes(q) || (l.ownerName || "").toLowerCase().includes(q); }
     return true;
   }), [planLots, filterStatus, filterSearch]);
   const filteredSet = useMemo(() => new Set(filtered.map(l => l.id)), [filtered]);
@@ -283,7 +283,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
         )}
 
         <div style={{ display: "grid", gap: 12 }}>
-          {[["Price", selectedLot.price != null ? `₹ ${selectedLot.price}` : null], ["Direction", selectedLot.direction || null], ["Owner", selectedLot.owner || null], ["Notes", selectedLot.notes || null]].filter(([, v]) => v).map(([label, value]) => (
+          {[["Price", selectedLot.price != null ? `₹ ${selectedLot.price}` : null], ["Direction", selectedLot.direction || null], ["Owner", selectedLot.ownerName || null], ["Notes", selectedLot.notes || null]].filter(([, v]) => v).map(([label, value]) => (
             <div key={label as string} style={{ padding: "10px 12px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e8edf3" }}>
               <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: .7, color: "#94a3b8", marginBottom: 3 }}>{label as string}</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: "#172033" }}>{value as string}</div>

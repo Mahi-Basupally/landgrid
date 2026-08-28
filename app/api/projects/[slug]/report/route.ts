@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const [plotsRes, ownersRes] = await Promise.all([
-    db.from('plots').select('id,plot_number,status,owner,owner_id,area_sq_yards,area_sq_ft,length_m,width_m,price,direction,section').eq('project_id', project.id).order('plot_number'),
+    db.from('plots').select('id,plot_number,status,owner_id,area_sq_yards,area_sq_ft,length_m,width_m,price,direction,section').eq('project_id', project.id).order('plot_number'),
     db.from('project_owners').select('id,name,email,phone').eq('project_id', project.id).order('name'),
   ]);
 
