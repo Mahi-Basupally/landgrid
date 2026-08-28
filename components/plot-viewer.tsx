@@ -73,9 +73,12 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           points: l.points || "", sectionId: l.sectionId || null,
         })));
         // Fit canvas to screen on load — xMidYMid so pan=0,0 centers it
-        const sw = window.innerWidth, sh2 = window.innerHeight;
+        const isMobile = window.innerWidth <= 767;
+        const barH = isMobile ? 56 : 0;
+        const sw = window.innerWidth;
+        const sh2 = window.innerHeight - barH;
         const fitZ = Math.min(sw / W, sh2 / H);
-        setZoom(fitZ);
+        setZoom(Math.max(0.05, fitZ));
         setPan({ x: 0, y: 0 });
       })
       .finally(() => setLoading(false));
@@ -101,10 +104,14 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
 
   function fitView() {
     const el = svgRef.current?.parentElement;
-    const sw = el ? el.clientWidth : window.innerWidth;
-    const sh2 = el ? el.clientHeight : window.innerHeight;
+    if (!el) return;
+    // On mobile the bottom bar (~56px) sits over the canvas — subtract it
+    const isMobile = window.innerWidth <= 767;
+    const barH = isMobile ? 56 : 0;
+    const sw = el.clientWidth;
+    const sh2 = el.clientHeight - barH;
     const fitZ = Math.min(sw / cw, sh2 / ch);
-    setZoom(fitZ);
+    setZoom(Math.max(0.05, fitZ));
     setPan({ x: 0, y: 0 });
   }
 
