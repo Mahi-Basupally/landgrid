@@ -301,9 +301,10 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
     <>
       <style>{`
         * { box-sizing: border-box; }
-        .pv { height: 100%; display: grid; grid-template-columns: 260px 1fr 300px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; color: #182235; background: #f4f6f9; }
+        .pv { height: 100%; flex: 1; min-height: 0; display: grid; grid-template-columns: 260px 1fr 300px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; color: #182235; background: #f4f6f9; }
+        @supports not (height: 100svh) { .pv { height: 100vh; } }
         .pv-left { background: #fff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; overflow: hidden; }
-        .pv-canvas { position: relative; overflow: hidden; background: #d9dee5; }
+        .pv-canvas { position: relative; overflow: hidden; background: #d9dee5; min-height: 0; }
         .pv-right { background: #fff; border-left: 1px solid #e2e8f0; overflow-y: auto; }
         .pv-toolbar { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 10; display: flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid rgba(226,232,240,.9); border-radius: 12px; background: rgba(255,255,255,.97); box-shadow: 0 4px 20px rgba(15,23,42,.1); }
         .pv-hint { font-size: 11px; color: #64748b; margin-left: auto; }

@@ -16,7 +16,7 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
   const { setState } = useHeader();
   useEffect(() => { setState({ projectName, isLoggedIn }); }, [projectName, isLoggedIn]);
   return (
-    <div style={{ height: '100%', overflow: 'hidden' }}>
+    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <PlotViewer projectSlug={projectSlug} />
     </div>
   );
