@@ -15,13 +15,13 @@ const center = (p: Point[]) => p.length ? { x: p.reduce((a, v) => a + v.x, 0) / 
 const normalize = (p: Point[]) => p.length >= 3 ? p : [{ x: 600, y: 400 }, { x: 800, y: 400 }, { x: 800, y: 520 }, { x: 600, y: 520 }];
 const edgeLen = (a: Point, b: Point) => Math.sqrt((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
 
-const STATUS: Record<string, { fill: string; stroke: string; label: string }> = {
-  available: { fill: "rgba(34,197,94,.18)",   stroke: "#16a34a", label: "Available" },
-  reserved:  { fill: "rgba(234,179,8,.22)",   stroke: "#ca8a04", label: "Reserved"  },
-  sold:      { fill: "rgba(239,68,68,.22)",   stroke: "#dc2626", label: "Sold"      },
-  hold:      { fill: "rgba(148,163,184,.22)", stroke: "#64748b", label: "Hold"      },
+const STATUS: Record<string, { dot: string; stroke: string; label: string }> = {
+  available: { dot: "#16a34a", stroke: "rgba(22,163,74,.55)",  label: "Available" },
+  reserved:  { dot: "#ca8a04", stroke: "rgba(202,138,4,.55)",  label: "Reserved"  },
+  sold:      { dot: "#dc2626", stroke: "rgba(220,38,38,.55)",  label: "Sold"      },
+  hold:      { dot: "#64748b", stroke: "rgba(100,116,139,.45)",label: "Hold"      },
 };
-const sc = (s: string) => STATUS[s] ?? { fill: "rgba(37,99,235,.14)", stroke: "#334155", label: s };
+const sc = (s: string) => STATUS[s] ?? { dot: "#334155", stroke: "rgba(51,65,85,.4)", label: s };
 
 export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   const [cw, setCw] = useState(DEFAULT_W), [ch, setCh] = useState(DEFAULT_H);
@@ -72,11 +72,11 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           direction: l.direction || "", notes: l.details || l.notes || "",
           points: l.points || "", sectionId: l.sectionId || null,
         })));
-        // Fit canvas to screen on load
+        // Fit canvas to screen on load — xMidYMid so pan=0,0 centers it
         const sw = window.innerWidth, sh2 = window.innerHeight;
-        const fitZ = Math.min(sw / W, sh2 / H) * 0.95;
+        const fitZ = Math.min(sw / W, sh2 / H);
         setZoom(fitZ);
-        setPan({ x: (W - W / fitZ) / 2, y: (H - H / fitZ) / 2 });
+        setPan({ x: 0, y: 0 });
       })
       .finally(() => setLoading(false));
   }, [projectSlug]);
@@ -100,10 +100,12 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
   }
 
   function fitView() {
-    const sw = window.innerWidth, sh2 = window.innerHeight;
-    const fitZ = Math.min(sw / cw, sh2 / ch) * 0.95;
+    const el = svgRef.current?.parentElement;
+    const sw = el ? el.clientWidth : window.innerWidth;
+    const sh2 = el ? el.clientHeight : window.innerHeight;
+    const fitZ = Math.min(sw / cw, sh2 / ch);
     setZoom(fitZ);
-    setPan({ x: (cw - cw / fitZ) / 2, y: (ch - ch / fitZ) / 2 });
+    setPan({ x: 0, y: 0 });
   }
 
   function focusLot(lot: Lot) {
@@ -220,8 +222,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           : filtered.slice().sort((a, b) => Number(a.number) - Number(b.number)).map(lot => {
               const col = sc(lot.status);
               return (
-                <button key={lot.id} onClick={() => focusLot(lot)} style={{ width: "100%", textAlign: "left", padding: "10px 10px", border: `1px solid ${selected === lot.id ? col.stroke : "#e4e9f0"}`, borderRadius: 8, background: selected === lot.id ? col.fill : "#fff", marginBottom: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: col.stroke, flexShrink: 0 }} />
+                <button key={lot.id} onClick={() => focusLot(lot)} style={{ width: "100%", textAlign: "left", padding: "10px 10px", border: `1px solid ${selected === lot.id ? col.dot : "#e4e9f0"}`, borderRadius: 8, background: selected === lot.id ? `${col.dot}18` : "#fff", marginBottom: 5, cursor: "pointer", display: "flex", alignItems: "center", gap: 9 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 999, background: col.dot, flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800, fontSize: 13 }}>Plot {lot.number}</div>
                     <div style={{ fontSize: 11, color: "#64748b", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{col.label}{lot.area != null ? ` · ${lot.area} sq.yd` : ""}</div>
@@ -251,8 +253,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           <button onClick={() => { setSelected(null); setSheet("none"); }} style={{ ...btn, padding: 7, marginTop: 4 }}><X size={15} /></button>
         </div>
 
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 14px", borderRadius: 999, background: col.fill, border: `1px solid ${col.stroke}`, fontWeight: 800, fontSize: 13, color: col.stroke, marginBottom: 16 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 2, background: col.stroke }} />{col.label}
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 14px", borderRadius: 999, background: "rgba(0,0,0,.05)", border: `1.5px solid ${col.dot}`, fontWeight: 800, fontSize: 13, color: col.dot, marginBottom: 16 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 999, background: col.dot, flexShrink: 0 }} />{col.label}
         </div>
 
         {(selectedLot.lengthM || selectedLot.widthM || selectedLot.area) && (
@@ -287,7 +289,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {Object.entries(STATUS).map(([key, c]) => (
               <div key={key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ width: 13, height: 13, borderRadius: 3, background: c.fill, border: `2px solid ${c.stroke}`, flexShrink: 0 }} />
+                <span style={{ width: 11, height: 11, borderRadius: 999, background: c.dot, flexShrink: 0 }} />
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{c.label}</span>
               </div>
             ))}
@@ -349,7 +351,7 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           </div>
 
           {/* SVG */}
-          <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMinYMin meet"
+          <svg ref={svgRef} viewBox={viewBox} preserveAspectRatio="xMidYMid meet"
             onPointerDown={onPD} onPointerMove={onPM} onPointerUp={onPU} onPointerCancel={onPU}
             onWheel={onWheel}
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
@@ -361,9 +363,34 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
               const isSel = selected === lot.id;
               const isFilt = !filteredSet.has(lot.id) && (filterStatus !== "all" || filterSearch.trim());
               const col = sc(lot.status);
+              const c = center(q);
+              // Glass fill: selected = gold glass, normal = white glass, filtered = dimmed
+              const fillColor = isSel
+                ? "rgba(255,215,0,.22)"
+                : isFilt ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.18)";
+              const strokeColor = isSel
+                ? "rgba(218,165,32,.85)"
+                : isFilt ? "rgba(148,163,184,.25)" : col.stroke;
+              const strokeW = isSel ? 3 : 1.5;
+              const dotR = Math.max(4, Math.min(10, 60 / zoom));
               return (
-                <g key={lot.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); focusLot(lot); }} style={{ cursor: "pointer" }}>
-                  <polygon points={stringify(q)} fill={isSel ? col.fill.replace(/[\d.]+\)$/, ".45)") : isFilt ? "rgba(203,213,225,.15)" : col.fill} stroke={isSel ? col.stroke : isFilt ? "#cbd5e1" : col.stroke} strokeWidth={isSel ? 4 : 2} opacity={isFilt ? .35 : 1} />
+                <g key={lot.id} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); focusLot(lot); }} style={{ cursor: "pointer" }} opacity={isFilt ? 0.35 : 1}>
+                  {/* Glass polygon */}
+                  <polygon points={stringify(q)}
+                    fill={fillColor}
+                    stroke={strokeColor}
+                    strokeWidth={strokeW / zoom}
+                    style={{ backdropFilter: "blur(2px)" }}
+                  />
+                  {/* Selected: gold glow ring */}
+                  {isSel && <polygon points={stringify(q)} fill="none" stroke="rgba(255,200,0,.35)" strokeWidth={6 / zoom} />}
+                  {/* Status dot — center of plot, not shown when filtered */}
+                  {!isFilt && !isSel && (
+                    <circle cx={c.x} cy={c.y} r={dotR} fill={col.dot} opacity={0.85} />
+                  )}
+                  {isSel && (
+                    <circle cx={c.x} cy={c.y} r={dotR * 1.3} fill="rgba(255,215,0,.9)" stroke="rgba(218,165,32,1)" strokeWidth={1.5 / zoom} />
+                  )}
                   {renderAnnotations(q, lot, zoom, isSel)}
                 </g>
               );
@@ -399,8 +426,8 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
                 <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1, color: "#94a3b8", marginBottom: 10 }}>LEGEND</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {Object.entries(STATUS).map(([key, c]) => (
-                    <div key={key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                      <span style={{ width: 13, height: 13, borderRadius: 3, background: c.fill, border: `2px solid ${c.stroke}`, flexShrink: 0 }} />
+              <div key={key} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ width: 11, height: 11, borderRadius: 999, background: c.dot, flexShrink: 0 }} />
                       <span style={{ fontSize: 12, fontWeight: 700 }}>{c.label}</span>
                     </div>
                   ))}
