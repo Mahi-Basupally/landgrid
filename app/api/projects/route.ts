@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { getCurrentUserFromRequest } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 function slugify(value: string) { return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 70); }
-async function currentUser() { const cookieStore = await cookies(); const token = cookieStore.get('landgrid_user')?.value; if (!token) return null; return getCurrentUserFromRequest(new Request('http://landgrid.local', { headers: { cookie: `landgrid_user=${token}` } })); }
+async function currentUser() { return getCurrentUser(); }
 
 export async function GET() {
   try { const user = await currentUser(); if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });

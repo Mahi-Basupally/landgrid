@@ -6,8 +6,6 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/projects';
-
-  // Use NEXT_PUBLIC_SITE_URL if set, otherwise derive from request origin
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || origin).replace(/\/$/, '');
 
   if (!code) {
@@ -34,28 +32,11 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error || !data.session) {
-    console.error('[callback] exchangeCodeForSession error:', error?.message);
+    console.error('[callback] error:', error?.message);
     return NextResponse.redirect(`${siteUrl}/login?error=exchange_failed`);
   }
 
-  // Build redirect response and explicitly copy ALL sb- cookies onto it
-  const response = NextResponse.redirect(`${siteUrl}${next}`);
-
-  // Supabase SSR sets cookies via cookieStore but in a Server Action context
-  // those don't propagate to a NextResponse redirect — copy them manually
-  cookieStore.getAll().forEach((cookie) => {
-    if (cookie.name.startsWith('sb-')) {
-      response.cookies.set(cookie.name, cookie.value, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 365,
-      });
-    }
-  });
-
-  // Sync user to public.users
+  // Sync user
   try {
     const { createClient } = await import('@supabase/supabase-js');
     const admin = createClient(
@@ -67,9 +48,10 @@ export async function GET(request: Request) {
       { id: data.user.id, email: data.user.email!, name: data.user.user_metadata?.full_name || null },
       { onConflict: 'id' }
     );
-  } catch (e) {
-    console.error('[callback] user sync error:', e);
-  }
+  } catch {}
 
-  return response;
+  // The correct pattern: let Next.js handle the redirect
+  // cookieStore.set() in a Route Handler persists cookies automatically
+  // Just redirect — cookies are already set via setAll above
+  return NextResponse.redirect(`${siteUrl}${next}`);
 }
