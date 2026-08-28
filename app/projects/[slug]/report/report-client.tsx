@@ -65,7 +65,7 @@ export default function ReportClient({ slug, projectName }: { slug: string; proj
   const { stats, owners, unassigned } = report;
 
   return (
-    <div style={{ minHeight: '100%', background: '#f4f6f9', fontFamily: 'Inter,ui-sans-serif,system-ui,sans-serif', color: '#182235' }}>
+    <div style={{ position: "absolute", inset: 0, overflowY: "auto", background: '#f4f6f9', fontFamily: 'Inter,ui-sans-serif,system-ui,sans-serif', color: '#182235' }}>
       {/* Header */}
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

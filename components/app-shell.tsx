@@ -10,5 +10,5 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const noShell = pathname === "/" || pathname === "/login" || pathname.startsWith("/embed/");
   if (noShell) return <>{children}</>;
   function setState(s: Partial<HeaderState>) { setHeaderState(prev => ({ ...prev, ...s })); }
-  return <HeaderContext.Provider value={{ state: headerState, setState }}><div style={{ height: "100svh", display: "flex", flexDirection: "column" }}><AppHeader projectName={headerState.projectName} message={headerState.message} isLoggedIn={true} /><div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>{children}</div></div></HeaderContext.Provider>;
+  return <HeaderContext.Provider value={{ state: headerState, setState }}><div style={{ height: "100svh", display: "flex", flexDirection: "column" }}><AppHeader projectName={headerState.projectName} message={headerState.message} isLoggedIn={true} /><div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>{children}</div></div></HeaderContext.Provider>;
 }
