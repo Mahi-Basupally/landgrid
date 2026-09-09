@@ -66,7 +66,11 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     const apply = () => {
       raf = 0;
       if (disposed) return;
-      const svg = document.querySelector('.pv-canvas svg') as SVGSVGElement | null;
+
+      // The project viewer currently renders its lot SVG inside .map-placeholder.
+      // Older viewer versions used .pv-canvas. Support both so owner highlighting
+      // is not silently skipped when the viewer container changes.
+      const svg = document.querySelector('.pv-canvas svg, .map-placeholder svg') as SVGSVGElement | null;
       if (!svg) return;
 
       let defs = svg.querySelector('defs#landgrid-owner-defs') as SVGDefsElement | null;
