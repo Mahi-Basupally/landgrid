@@ -1,11 +1,16 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://gjruvyoykroerdlgxjcm.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'sb_publishable_7s6wxgyKEy_cxHIm4R8MXQ_4PannqRs';
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Auth callback must be allowed to exchange the OAuth code and set the
-  // Supabase session cookies without another middleware redirect.
   if (
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/_next/') ||
@@ -16,36 +21,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Public project view does not require Supabase at all. Keep this check
-  // before client creation so a missing Preview environment cannot cause a
-  // middleware invocation failure on public project pages.
   const isProjectView = /^\/projects\/[^/]+$/.test(pathname);
   if (isProjectView) {
     return NextResponse.next({ request });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Avoid a hard 500 if a deployment is missing its Supabase environment
-  // variables. Authenticated routes will fall back to the login page instead.
-  if (!supabaseUrl || !supabaseAnonKey) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
-  }
-
   let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        // Keep both the request and response cookies in sync. This is required
-        // when Supabase refreshes an access token during middleware execution.
         cookiesToSet.forEach(({ name, value }) => {
           request.cookies.set(name, value);
         });
@@ -68,7 +55,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // All other routes need auth.
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
