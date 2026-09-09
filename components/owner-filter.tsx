@@ -45,7 +45,6 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
             color: owner.color || null,
           });
         }
-
         const ownerMap = new Map<string, Owner>();
         for (const lot of d.lots || []) {
           if (!lot.ownerId) continue;
@@ -55,7 +54,6 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
           current.plotNumbers.push(String(lot.number));
           ownerMap.set(owner.id, current);
         }
-
         setOwners(Array.from(ownerMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
       })
       .catch(() => { if (!cancelled) setOwners([]); })
@@ -73,11 +71,11 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   useEffect(() => {
     let raf = 0;
     let disposed = false;
+    let applying = false;
 
     const apply = () => {
       raf = 0;
-      if (disposed) return;
-
+      if (disposed || applying) return;
       const svg = document.querySelector('.pv-canvas svg, .map-placeholder svg') as SVGSVGElement | null;
       if (!svg) return;
 
@@ -85,10 +83,8 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       const ownerByPlot = new Map<string, Owner>();
       owners.forEach(owner => owner.plotNumbers.forEach(number => ownerByPlot.set(String(number), owner)));
 
-      const groups = Array.from(svg.querySelectorAll('g')).filter(
-        group => group.querySelector('polygon')
-      ) as SVGGElement[];
-
+      const groups = Array.from(svg.querySelectorAll('g')).filter(group => group.querySelector('polygon')) as SVGGElement[];
+      applying = true;
       groups.forEach(group => {
         const polygon = group.querySelector('polygon') as SVGPolygonElement | null;
         if (!polygon) return;
@@ -96,15 +92,11 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
         let plotNumber = '';
         for (const text of Array.from(group.querySelectorAll('text'))) {
           const value = text.textContent?.trim() || '';
-          if (ownerByPlot.has(value)) {
-            plotNumber = value;
-            break;
-          }
+          if (ownerByPlot.has(value)) { plotNumber = value; break; }
         }
 
         const owner = plotNumber ? ownerByPlot.get(plotNumber) : undefined;
         const highlighted = Boolean(owner && selected.has(owner.id));
-
         if (highlighted && owner) {
           const palette = colorByOwner.get(owner.id) || paletteFor(0);
           polygon.setAttribute('fill', palette.base);
@@ -121,11 +113,11 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
           group.style.opacity = '0.20';
           group.style.filter = '';
         } else {
-          // Let React/PlotViewer own the normal unfiltered appearance.
           group.style.opacity = '';
           group.style.filter = '';
         }
       });
+      applying = false;
     };
 
     const schedule = () => {
@@ -133,22 +125,26 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     };
 
     schedule();
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.body, { childList: true, subtree: true });
-    const timer = window.setTimeout(schedule, 150);
+    const observer = new MutationObserver(() => schedule());
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['fill', 'stroke', 'stroke-width', 'fill-opacity', 'style'],
+    });
+    const timers = [0, 50, 150, 400, 800].map(ms => window.setTimeout(schedule, ms));
 
     return () => {
       disposed = true;
       observer.disconnect();
-      window.clearTimeout(timer);
+      timers.forEach(window.clearTimeout);
       if (raf) window.cancelAnimationFrame(raf);
     };
   }, [owners, colorByOwner, selected]);
 
   const toggle = (id: string) => setSelected(current => {
     const next = new Set(current);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
+    if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
 
