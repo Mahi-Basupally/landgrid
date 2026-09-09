@@ -24,7 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const { slug } = await params;
     const auth = await requireAdmin(slug);
     if ('error' in auth) return auth.error;
-    const { data, error } = await supabaseAdmin().from('project_owners').select('id,name,email,phone,notes,created_at,updated_at').eq('project_id', auth.project.id).order('name');
+    const { data, error } = await supabaseAdmin().from('project_owners').select('id,name,email,phone,notes,color,created_at,updated_at').eq('project_id', auth.project.id).order('name');
     if (error) throw error;
     return NextResponse.json({ owners: data || [] }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
@@ -41,7 +41,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     const body = await req.json().catch(() => ({}));
     const name = String(body.name || '').trim();
     if (!name) return NextResponse.json({ error: 'Owner name is required' }, { status: 400 });
-    const { data, error } = await supabaseAdmin().from('project_owners').insert({ project_id: auth.project.id, name, email: String(body.email || '').trim() || null, phone: String(body.phone || '').trim() || null, notes: String(body.notes || '').trim() || null }).select('id,name,email,phone,notes,created_at,updated_at').single();
+    const color = /^#[0-9a-f]{6}$/i.test(String(body.color || '')) ? String(body.color).toUpperCase() : null;
+    const { data, error } = await supabaseAdmin().from('project_owners').insert({ project_id: auth.project.id, name, email: String(body.email || '').trim() || null, phone: String(body.phone || '').trim() || null, notes: String(body.notes || '').trim() || null, color }).select('id,name,email,phone,notes,color,created_at,updated_at').single();
     if (error) throw error;
     return NextResponse.json({ owner: data });
   } catch (error: any) {
@@ -58,12 +59,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
     if ('error' in auth) return auth.error;
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || '');
-    const name = String(body.name || '').trim();
-    if (!id || !name) return NextResponse.json({ error: 'Owner id and name are required' }, { status: 400 });
-    const { data, error } = await supabaseAdmin().from('project_owners').update({ name, email: String(body.email || '').trim() || null, phone: String(body.phone || '').trim() || null, notes: String(body.notes || '').trim() || null, updated_at: new Date().toISOString() }).eq('id', id).eq('project_id', auth.project.id).select('id,name,email,phone,notes,created_at,updated_at').single();
+    if (!id) return NextResponse.json({ error: 'Owner id is required' }, { status: 400 });
+    const patch: Record<string, string | null> = { updated_at: new Date().toISOString() };
+    if (body.name !== undefined) patch.name = String(body.name || '').trim();
+    if (body.email !== undefined) patch.email = String(body.email || '').trim() || null;
+    if (body.phone !== undefined) patch.phone = String(body.phone || '').trim() || null;
+    if (body.notes !== undefined) patch.notes = String(body.notes || '').trim() || null;
+    if (body.color !== undefined) patch.color = /^#[0-9a-f]{6}$/i.test(String(body.color || '')) ? String(body.color).toUpperCase() : null;
+    if (patch.name !== undefined && !patch.name) return NextResponse.json({ error: 'Owner name is required' }, { status: 400 });
+    const { data, error } = await supabaseAdmin().from('project_owners').update(patch).eq('id', id).eq('project_id', auth.project.id).select('id,name,email,phone,notes,color,created_at,updated_at').single();
     if (error) throw error;
     return NextResponse.json({ owner: data });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[owners-patch]', error);
     return NextResponse.json({ error: 'Unable to update owner' }, { status: 400 });
   }
