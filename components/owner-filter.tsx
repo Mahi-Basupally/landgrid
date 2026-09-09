@@ -60,15 +60,22 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   }, [owners]);
 
   useEffect(() => {
+    let raf = 0;
+    let disposed = false;
+
     const apply = () => {
+      raf = 0;
+      if (disposed) return;
       const svg = document.querySelector('.pv-canvas svg') as SVGSVGElement | null;
       if (!svg) return;
+
       let defs = svg.querySelector('defs#landgrid-owner-defs') as SVGDefsElement | null;
       if (!defs) {
         defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
         defs.setAttribute('id', 'landgrid-owner-defs');
         svg.prepend(defs);
       }
+
       colorByOwner.forEach((palette, ownerId) => {
         const id = slugId(ownerId);
         let gradient = defs!.querySelector(`#${CSS.escape(id)}`) as SVGLinearGradientElement | null;
@@ -86,12 +93,19 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       });
 
       const active = selected.size > 0;
+      const ownerByPlot = new Map<string, Owner>();
+      owners.forEach(owner => owner.plotNumbers.forEach(number => ownerByPlot.set(String(number), owner)));
       const groups = Array.from(svg.querySelectorAll(':scope > g')) as SVGGElement[];
+
       groups.forEach(group => {
-        const texts = Array.from(group.querySelectorAll('text')).map(t => t.textContent?.trim() || '');
         const polygon = group.querySelector('polygon') as SVGPolygonElement | null;
         if (!polygon) return;
-        const owner = owners.find(o => o.plotNumbers.some(n => texts.includes(n)));
+        const texts = group.querySelectorAll('text');
+        let owner: Owner | undefined;
+        for (const text of Array.from(texts)) {
+          const candidate = ownerByPlot.get(text.textContent?.trim() || '');
+          if (candidate) { owner = candidate; break; }
+        }
         const highlighted = Boolean(owner && selected.has(owner.id));
         if (highlighted) {
           const palette = colorByOwner.get(owner!.id)!;
@@ -122,12 +136,22 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
         }
       });
     };
-    apply();
-    const observer = new MutationObserver(() => apply());
-    const timer = window.setTimeout(apply, 50);
-    const interval = window.setInterval(apply, 250);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['points', 'viewBox'] });
-    return () => { observer.disconnect(); window.clearTimeout(timer); window.clearInterval(interval); };
+
+    const schedule = () => {
+      if (!raf && !disposed) raf = window.requestAnimationFrame(apply);
+    };
+
+    schedule();
+    const observer = new MutationObserver(schedule);
+    observer.observe(document.body, { childList: true, subtree: true });
+    const timer = window.setTimeout(schedule, 100);
+
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      window.clearTimeout(timer);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
   }, [owners, colorByOwner, selected]);
 
   const toggle = (id: string) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
