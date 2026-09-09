@@ -22,7 +22,12 @@ export async function middleware(request: NextRequest) {
   }
 
   const isProjectView = /^\/projects\/[^/]+$/.test(pathname);
-  if (isProjectView) {
+  const isPublicProjectPlan = /^\/api\/projects\/[^/]+\/plan$/.test(pathname);
+  const isPublicProjectAsset = /^\/api\/projects\/[^/]+\/assets\/file$/.test(pathname);
+
+  // Public project pages must be able to load their plan and image assets
+  // without an authenticated session. Keep other project APIs protected.
+  if (isProjectView || isPublicProjectPlan || isPublicProjectAsset) {
     return NextResponse.next({ request });
   }
 
