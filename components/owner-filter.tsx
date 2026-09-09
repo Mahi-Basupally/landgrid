@@ -16,10 +16,12 @@ function hexToPalette(hex: string): Palette {
   if (!m) return { base: '#2563eb', light: '#bfdbfe', dark: '#1d4ed8' };
   const n = Number.parseInt(m[1], 16);
   const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
-  return { base: hex.toUpperCase(), light: `rgb(${Math.min(255, r + 90)},${Math.min(255, g + 90)},${Math.min(255, b + 90)})`, dark: `rgb(${Math.round(r * .65)},${Math.round(g * .65)},${Math.round(b * .65)})` };
+  return {
+    base: hex.toUpperCase(),
+    light: `rgb(${Math.min(255, r + 90)},${Math.min(255, g + 90)},${Math.min(255, b + 90)})`,
+    dark: `rgb(${Math.round(r * .65)},${Math.round(g * .65)},${Math.round(b * .65)})`,
+  };
 }
-
-function slugId(value: string) { return `landgrid-owner-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'owner'}`; }
 
 export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   const [owners, setOwners] = useState<Owner[]>([]);
@@ -34,9 +36,17 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       .then(r => r.json())
       .then(d => {
         if (cancelled) return;
-        const ownerMap = new Map<string, Owner>();
         const ownerById = new Map<string, Owner>();
-        for (const owner of d.owners || []) ownerById.set(String(owner.id), { id: String(owner.id), name: String(owner.name || 'Unnamed owner'), plotNumbers: [], color: owner.color || null });
+        for (const owner of d.owners || []) {
+          ownerById.set(String(owner.id), {
+            id: String(owner.id),
+            name: String(owner.name || 'Unnamed owner'),
+            plotNumbers: [],
+            color: owner.color || null,
+          });
+        }
+
+        const ownerMap = new Map<string, Owner>();
         for (const lot of d.lots || []) {
           if (!lot.ownerId) continue;
           const owner = ownerById.get(String(lot.ownerId));
@@ -45,6 +55,7 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
           current.plotNumbers.push(String(lot.number));
           ownerMap.set(owner.id, current);
         }
+
         setOwners(Array.from(ownerMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
       })
       .catch(() => { if (!cancelled) setOwners([]); })
@@ -67,74 +78,50 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       raf = 0;
       if (disposed) return;
 
-      // The project viewer currently renders its lot SVG inside .map-placeholder.
-      // Older viewer versions used .pv-canvas. Support both so owner highlighting
-      // is not silently skipped when the viewer container changes.
       const svg = document.querySelector('.pv-canvas svg, .map-placeholder svg') as SVGSVGElement | null;
       if (!svg) return;
-
-      let defs = svg.querySelector('defs#landgrid-owner-defs') as SVGDefsElement | null;
-      if (!defs) {
-        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-        defs.setAttribute('id', 'landgrid-owner-defs');
-        svg.prepend(defs);
-      }
-
-      colorByOwner.forEach((palette, ownerId) => {
-        const id = slugId(ownerId);
-        let gradient = defs!.querySelector(`#${CSS.escape(id)}`) as SVGLinearGradientElement | null;
-        if (!gradient) {
-          gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-          gradient.setAttribute('id', id);
-          gradient.setAttribute('x1', '0'); gradient.setAttribute('y1', '0'); gradient.setAttribute('x2', '1'); gradient.setAttribute('y2', '1');
-          defs!.appendChild(gradient);
-        }
-        while (gradient.firstChild) gradient.removeChild(gradient.firstChild);
-        [['0%', '#ffffff', '0.78'], ['18%', palette.light, '0.9'], ['52%', palette.base, '0.86'], ['78%', palette.dark, '0.9'], ['100%', '#ffffff', '0.35']].forEach(([offset, color, opacity]) => {
-          const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-          stop.setAttribute('offset', offset); stop.setAttribute('stop-color', color); stop.setAttribute('stop-opacity', opacity); gradient!.appendChild(stop);
-        });
-      });
 
       const active = selected.size > 0;
       const ownerByPlot = new Map<string, Owner>();
       owners.forEach(owner => owner.plotNumbers.forEach(number => ownerByPlot.set(String(number), owner)));
-      const groups = Array.from(svg.querySelectorAll(':scope > g')) as SVGGElement[];
+
+      const groups = Array.from(svg.querySelectorAll('g')).filter(
+        group => group.querySelector('polygon')
+      ) as SVGGElement[];
 
       groups.forEach(group => {
         const polygon = group.querySelector('polygon') as SVGPolygonElement | null;
         if (!polygon) return;
-        const texts = group.querySelectorAll('text');
-        let owner: Owner | undefined;
-        for (const text of Array.from(texts)) {
-          const candidate = ownerByPlot.get(text.textContent?.trim() || '');
-          if (candidate) { owner = candidate; break; }
+
+        let plotNumber = '';
+        for (const text of Array.from(group.querySelectorAll('text'))) {
+          const value = text.textContent?.trim() || '';
+          if (ownerByPlot.has(value)) {
+            plotNumber = value;
+            break;
+          }
         }
+
+        const owner = plotNumber ? ownerByPlot.get(plotNumber) : undefined;
         const highlighted = Boolean(owner && selected.has(owner.id));
-        if (highlighted) {
-          const palette = colorByOwner.get(owner!.id)!;
-          polygon.setAttribute('fill', `url(#${slugId(owner!.id)})`);
+
+        if (highlighted && owner) {
+          const palette = colorByOwner.get(owner.id) || paletteFor(0);
+          polygon.setAttribute('fill', palette.base);
           polygon.setAttribute('stroke', palette.dark);
           polygon.setAttribute('stroke-width', '3');
-          polygon.setAttribute('fill-opacity', '1');
-          polygon.style.filter = `drop-shadow(0 2px 6px ${palette.base}99)`;
+          polygon.setAttribute('fill-opacity', '0.82');
           group.style.opacity = '1';
-          group.style.filter = `drop-shadow(0 1px 4px ${palette.base}66)`;
+          group.style.filter = `drop-shadow(0 2px 5px ${palette.base}88)`;
         } else if (active) {
-          polygon.setAttribute('fill', 'rgba(255,255,255,.025)');
-          polygon.setAttribute('stroke', 'rgba(148,163,184,.12)');
+          polygon.setAttribute('fill', 'rgba(148,163,184,.10)');
+          polygon.setAttribute('stroke', 'rgba(148,163,184,.25)');
           polygon.setAttribute('stroke-width', '1');
           polygon.setAttribute('fill-opacity', '1');
-          polygon.style.filter = '';
-          group.style.opacity = '0.16';
+          group.style.opacity = '0.20';
           group.style.filter = '';
         } else {
-          const isSelectedLot = group.querySelector('circle[fill="rgba(255,215,0,.9)"]') !== null;
-          polygon.setAttribute('fill', isSelectedLot ? 'rgba(255,215,0,.22)' : 'rgba(255,255,255,.18)');
-          polygon.setAttribute('stroke', isSelectedLot ? 'rgba(218,165,32,.85)' : 'transparent');
-          polygon.setAttribute('stroke-width', isSelectedLot ? '3' : '0');
-          polygon.setAttribute('fill-opacity', '1');
-          polygon.style.filter = '';
+          // Let React/PlotViewer own the normal unfiltered appearance.
           group.style.opacity = '';
           group.style.filter = '';
         }
@@ -148,7 +135,7 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     schedule();
     const observer = new MutationObserver(schedule);
     observer.observe(document.body, { childList: true, subtree: true });
-    const timer = window.setTimeout(schedule, 100);
+    const timer = window.setTimeout(schedule, 150);
 
     return () => {
       disposed = true;
@@ -158,14 +145,24 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     };
   }, [owners, colorByOwner, selected]);
 
-  const toggle = (id: string) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const toggle = (id: string) => setSelected(current => {
+    const next = new Set(current);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+
   const clear = () => setSelected(new Set());
 
   async function changeColor(ownerId: string, color: string) {
     const normalized = /^#[0-9a-f]{6}$/i.test(color) ? color.toUpperCase() : color;
     setOwners(current => current.map(o => o.id === ownerId ? { ...o, color: normalized } : o));
     try {
-      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/owners`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: ownerId, color: normalized }) });
+      const r = await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/owners`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: ownerId, color: normalized }),
+      });
       if (!r.ok) throw new Error('Unable to save owner color');
     } catch {
       // Keep the color visible for this session even if the current viewer is not an admin.
