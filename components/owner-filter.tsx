@@ -103,12 +103,19 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       .then(r => r.json())
       .then(d => {
         if (cancelled) return;
-        const rawOwners = d.owners || [];
+        // The plan API exposes these collections as `owners` and `lots`.
+        // Keep compatibility with older/alternate response names as well.
+        const rawOwners = d.owners || d.project_owners || [];
         const ownerById = new Map<string, Owner>();
         rawOwners.forEach((o: any) => ownerById.set(String(o.id), {
           id: String(o.id), name: String(o.name || 'Unnamed owner'), plotNumbers: [], color: o.color || null,
         }));
-        const rawLots: Lot[] = (d.lots || []).map((l: any) => ({ id: String(l.id), number: String(l.number), ownerId: l.ownerId ? String(l.ownerId) : null, points: l.points || '' }));
+        const rawLots: Lot[] = (d.lots || d.plots || []).map((l: any) => ({
+          id: String(l.id),
+          number: String(l.number ?? l.plot_number ?? ''),
+          ownerId: l.ownerId != null ? String(l.ownerId) : (l.owner_id != null ? String(l.owner_id) : null),
+          points: typeof l.points === 'string' ? l.points : String(l.points || l.geometry?.points || ''),
+        }));
         const ownerMap = new Map<string, Owner>();
         rawLots.forEach(lot => {
           if (!lot.ownerId) return;
