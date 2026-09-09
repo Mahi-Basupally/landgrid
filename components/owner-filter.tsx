@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, Users, X } from 'lucide-react';
 
 type Owner = { id: string; name: string; plotNumbers: string[] };
-
 type Palette = { base: string; light: string; dark: string };
 
 const PALETTE: Palette[] = [
@@ -22,13 +21,8 @@ const PALETTE: Palette[] = [
   { base: '#84cc16', light: '#d9f99d', dark: '#4d7c0f' },
 ];
 
-function paletteFor(index: number) {
-  return PALETTE[index % PALETTE.length];
-}
-
-function slugId(value: string) {
-  return `landgrid-owner-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'owner'}`;
-}
+function paletteFor(index: number) { return PALETTE[index % PALETTE.length]; }
+function slugId(value: string) { return `landgrid-owner-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'owner'}`; }
 
 export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   const [owners, setOwners] = useState<Owner[]>([]);
@@ -87,19 +81,9 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
         gradient.setAttribute('id', id);
         gradient.setAttribute('x1', '0'); gradient.setAttribute('y1', '0');
         gradient.setAttribute('x2', '1'); gradient.setAttribute('y2', '1');
-        const stops = [
-          ['0%', '#ffffff', '0.88'],
-          ['18%', palette.light, '0.9'],
-          ['52%', palette.base, '0.82'],
-          ['78%', palette.dark, '0.88'],
-          ['100%', '#ffffff', '0.42'],
-        ];
-        stops.forEach(([offset, color, opacity]) => {
+        [['0%', '#ffffff', '0.88'], ['18%', palette.light, '0.9'], ['52%', palette.base, '0.82'], ['78%', palette.dark, '0.88'], ['100%', '#ffffff', '0.42']].forEach(([offset, color, opacity]) => {
           const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-          stop.setAttribute('offset', offset);
-          stop.setAttribute('stop-color', color);
-          stop.setAttribute('stop-opacity', opacity);
-          gradient.appendChild(stop);
+          stop.setAttribute('offset', offset); stop.setAttribute('stop-color', color); stop.setAttribute('stop-opacity', opacity); gradient.appendChild(stop);
         });
         defs!.appendChild(gradient);
       });
@@ -110,12 +94,10 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
         const number = group.querySelector('text')?.textContent?.trim();
         const polygon = group.querySelector('polygon') as SVGPolygonElement | null;
         if (!number || !polygon) return;
-
         const owner = owners.find(o => o.plotNumbers.includes(number));
-        const highlightedOwner = owner && selected.has(owner.id);
-        const isOwnedByAnySelected = Boolean(highlightedOwner);
+        const highlighted = Boolean(owner && selected.has(owner.id));
 
-        if (isOwnedByAnySelected) {
+        if (highlighted) {
           const palette = colorByOwner.get(owner!.id)!;
           polygon.setAttribute('fill', `url(#${slugId(owner!.id)})`);
           polygon.setAttribute('stroke', palette.dark);
@@ -133,13 +115,14 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
           group.style.opacity = '0.28';
           group.style.filter = '';
         } else {
+          const isSelectedLot = group.querySelector('circle[fill="rgba(255,215,0,.9)"]') !== null;
+          polygon.setAttribute('fill', isSelectedLot ? 'rgba(255,215,0,.22)' : 'rgba(255,255,255,.18)');
+          polygon.setAttribute('stroke', isSelectedLot ? 'rgba(218,165,32,.85)' : 'transparent');
+          polygon.setAttribute('stroke-width', isSelectedLot ? '3' : '0');
+          polygon.setAttribute('fill-opacity', '1');
           polygon.style.filter = '';
           group.style.opacity = '';
-          // Let PlotViewer own the default/selected polygon appearance when no owner filter is active.
-          polygon.style.removeProperty('fill');
-          polygon.style.removeProperty('stroke');
-          polygon.style.removeProperty('stroke-width');
-          polygon.style.removeProperty('fill-opacity');
+          group.style.filter = '';
         }
       });
     };
@@ -148,20 +131,11 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     const observer = new MutationObserver(() => apply());
     const timer = window.setTimeout(apply, 50);
     const interval = window.setInterval(apply, 250);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['d', 'points', 'viewBox'] });
-    return () => {
-      observer.disconnect();
-      window.clearTimeout(timer);
-      window.clearInterval(interval);
-    };
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['points', 'viewBox'] });
+    return () => { observer.disconnect(); window.clearTimeout(timer); window.clearInterval(interval); };
   }, [owners, colorByOwner, selected]);
 
-  const toggle = (id: string) => setSelected(current => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
-
+  const toggle = (id: string) => setSelected(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const clear = () => setSelected(new Set());
 
   return (
@@ -169,33 +143,25 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 10px' }}>
         <button onClick={() => setOpen(v => !v)} style={{ border: 0, background: 'transparent', padding: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: '#172033' }}>
           <span style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center', background: '#eff6ff', color: '#2563eb' }}><Users size={15} /></span>
-          <span style={{ textAlign: 'left' }}>
-            <span style={{ display: 'block', fontSize: 11, letterSpacing: .8, fontWeight: 900, color: '#64748b' }}>OWNERS</span>
-            <span style={{ display: 'block', fontSize: 13, fontWeight: 850 }}>Highlight by owner</span>
-          </span>
+          <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 11, letterSpacing: .8, fontWeight: 900, color: '#64748b' }}>OWNERS</span><span style={{ display: 'block', fontSize: 13, fontWeight: 850 }}>Highlight by owner</span></span>
           <ChevronDown size={15} style={{ marginLeft: 2, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .2s' }} />
         </button>
         {selected.size > 0 && <button onClick={clear} style={{ border: 0, background: '#f8fafc', color: '#475569', borderRadius: 7, padding: '5px 7px', cursor: 'pointer', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>}
       </div>
-
-      {open && (
-        <div style={{ borderTop: '1px solid #f1f5f9', padding: '7px 10px 10px', maxHeight: 255, overflowY: 'auto' }}>
-          {loading ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>Loading owners…</div> : owners.length === 0 ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>No plot owners assigned.</div> : owners.map((owner, index) => {
-            const palette = colorByOwner.get(owner.id)!;
-            const checked = selected.has(owner.id);
-            return (
-              <label key={owner.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 7px', borderRadius: 8, cursor: 'pointer', background: checked ? `${palette.light}66` : 'transparent', border: checked ? `1px solid ${palette.light}` : '1px solid transparent' }}>
-                <input type="checkbox" checked={checked} onChange={() => toggle(owner.id)} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
-                <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'grid', placeItems: 'center', border: `1.5px solid ${checked ? palette.dark : '#cbd5e1'}`, background: checked ? palette.base : '#fff', color: '#fff', boxShadow: checked ? `0 2px 6px ${palette.base}55` : 'none' }}>{checked && <Check size={12} strokeWidth={3} />}</span>
-                <span style={{ width: 12, height: 12, borderRadius: 4, flexShrink: 0, background: `linear-gradient(135deg,#fff,${palette.base} 55%,${palette.dark})`, boxShadow: `0 1px 3px ${palette.base}55` }} />
-                <span style={{ minWidth: 0, flex: 1, fontSize: 12, fontWeight: 750, color: '#243047', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner.name}</span>
-                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{owner.plotNumbers.length}</span>
-              </label>
-            );
-          })}
-          {selected.size > 0 && <div style={{ marginTop: 7, padding: '7px 9px', borderRadius: 7, background: '#f8fafc', color: '#64748b', fontSize: 10, lineHeight: 1.4 }}>Selected owners are shown as glossy colored plots. Each owner keeps the same unique color across the map.</div>}
-        </div>
-      )}
+      {open && <div style={{ borderTop: '1px solid #f1f5f9', padding: '7px 10px 10px', maxHeight: 255, overflowY: 'auto' }}>
+        {loading ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>Loading owners…</div> : owners.length === 0 ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>No plot owners assigned.</div> : owners.map(owner => {
+          const palette = colorByOwner.get(owner.id)!;
+          const checked = selected.has(owner.id);
+          return <label key={owner.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px', borderRadius: 8, cursor: 'pointer', background: checked ? `${palette.light}66` : 'transparent', border: checked ? `1px solid ${palette.light}` : '1px solid transparent' }}>
+            <input type="checkbox" checked={checked} onChange={() => toggle(owner.id)} style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }} />
+            <span style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'grid', placeItems: 'center', border: `1.5px solid ${checked ? palette.dark : '#cbd5e1'}`, background: checked ? palette.base : '#fff', color: '#fff', boxShadow: checked ? `0 2px 6px ${palette.base}55` : 'none' }}>{checked && <Check size={12} strokeWidth={3} />}</span>
+            <span style={{ width: 12, height: 12, borderRadius: 4, flexShrink: 0, background: `linear-gradient(135deg,#fff,${palette.base} 55%,${palette.dark})`, boxShadow: `0 1px 3px ${palette.base}55` }} />
+            <span style={{ minWidth: 0, flex: 1, fontSize: 12, fontWeight: 750, color: '#243047', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner.name}</span>
+            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{owner.plotNumbers.length}</span>
+          </label>;
+        })}
+        {selected.size > 0 && <div style={{ marginTop: 7, padding: '7px 9px', borderRadius: 7, background: '#f8fafc', color: '#64748b', fontSize: 10, lineHeight: 1.4 }}>Selected owners are shown as glossy colored plots. Each owner keeps the same unique color across the map.</div>}
+      </div>}
     </div>
   );
 }
