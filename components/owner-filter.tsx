@@ -103,8 +103,6 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
       .then(r => r.json())
       .then(d => {
         if (cancelled) return;
-        // The plan API exposes these collections as `owners` and `lots`.
-        // Keep compatibility with older/alternate response names as well.
         const rawOwners = d.owners || d.project_owners || [];
         const ownerById = new Map<string, Owner>();
         rawOwners.forEach((o: any) => ownerById.set(String(o.id), {
@@ -140,11 +138,20 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     return map;
   }, [owners]);
 
-  const toggle = (id: string) => setSelected(current => {
-    const next = new Set(current);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const toggle = (id: string) => {
+    const owner = owners.find(o => o.id === id);
+    setSelected(current => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    if (owner) {
+      const wasSelected = selected.has(id);
+      window.alert(
+        `LANDGRID OWNER FILTER TEST\n\n${wasSelected ? 'Deselected' : 'Selected'} owner: ${owner.name}\nAssigned plots: ${owner.plotNumbers.length}\n\nIf you see this alert, the new owner-filter code is running.`
+      );
+    }
+  };
   const clear = () => setSelected(new Set());
 
   async function changeColor(ownerId: string, color: string) {
