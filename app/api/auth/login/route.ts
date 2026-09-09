@@ -11,12 +11,13 @@ const SUPABASE_PUBLISHABLE_KEY =
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin).replace(/\/$/, '');
+  // Keep the entire OAuth flow on the same host that started it. Using a
+  // configured site URL here can move the callback to another Vercel alias,
+  // which cannot receive the verifier cookie created on this host.
+  const siteUrl = requestUrl.origin.replace(/\/$/, '');
   const next = requestUrl.searchParams.get('next') || '/projects';
   const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/projects';
   const cookieStore = await cookies();
-
-  let response = NextResponse.redirect(`${siteUrl}${safeNext}`);
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
@@ -25,17 +26,7 @@ export async function GET(request: Request) {
       },
       setAll(cookiesToSet) {
         for (const { name, value, options } of cookiesToSet) {
-          try {
-            cookieStore.set(name, value, options);
-          } catch {
-            // Response cookies below are the browser-facing cookies.
-          }
-          response.cookies.set(name, value, {
-            ...options,
-            path: '/',
-            sameSite: options?.sameSite ?? 'lax',
-            secure: requestUrl.protocol === 'https:',
-          });
+          cookieStore.set(name, value, options);
         }
       },
     },
@@ -54,11 +45,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${siteUrl}/login?error=oauth_start_failed`);
   }
 
-  response = NextResponse.redirect(data.url);
-  // signInWithOAuth may have updated the cookie adapter after the initial
-  // response was created, so copy the current verifier cookies explicitly.
+  const response = NextResponse.redirect(data.url);
+  // signInWithOAuth stores the PKCE verifier in the request cookie store.
+  // Copy every auth cookie to the actual browser response, including any
+  // chunked cookie variants, so the callback can exchange the code reliably.
   for (const cookie of cookieStore.getAll()) {
-    if (cookie.name.includes('code-verifier')) {
+    if (cookie.name.includes('auth-token')) {
       response.cookies.set(cookie.name, cookie.value, {
         path: '/',
         httpOnly: true,
