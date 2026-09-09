@@ -6,22 +6,16 @@ import { Check, ChevronDown, Users, X } from 'lucide-react';
 type Owner = { id: string; name: string; plotNumbers: string[] };
 type Palette = { base: string; light: string; dark: string };
 
-const PALETTE: Palette[] = [
-  { base: '#0ea5e9', light: '#bae6fd', dark: '#0369a1' },
-  { base: '#8b5cf6', light: '#ddd6fe', dark: '#6d28d9' },
-  { base: '#ec4899', light: '#fbcfe8', dark: '#be185d' },
-  { base: '#f97316', light: '#fed7aa', dark: '#c2410c' },
-  { base: '#10b981', light: '#a7f3d0', dark: '#047857' },
-  { base: '#eab308', light: '#fef08a', dark: '#a16207' },
-  { base: '#06b6d4', light: '#a5f3fc', dark: '#0e7490' },
-  { base: '#ef4444', light: '#fecaca', dark: '#b91c1c' },
-  { base: '#14b8a6', light: '#99f6e4', dark: '#0f766e' },
-  { base: '#6366f1', light: '#c7d2fe', dark: '#4338ca' },
-  { base: '#f43f5e', light: '#fecdd3', dark: '#be123c' },
-  { base: '#84cc16', light: '#d9f99d', dark: '#4d7c0f' },
-];
+// Golden-angle hue spacing keeps owner colors distinct even when a project has many owners.
+function paletteFor(index: number): Palette {
+  const hue = Math.round((index * 137.508) % 360);
+  return {
+    base: `hsl(${hue} 78% 52%)`,
+    light: `hsl(${hue} 88% 82%)`,
+    dark: `hsl(${hue} 82% 34%)`,
+  };
+}
 
-function paletteFor(index: number) { return PALETTE[index % PALETTE.length]; }
 function slugId(value: string) { return `landgrid-owner-${value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'owner'}`; }
 
 export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
