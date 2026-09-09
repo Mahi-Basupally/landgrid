@@ -20,7 +20,13 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <PlotViewer projectSlug={projectSlug} />
       <OwnerFilter projectSlug={projectSlug} />
-      <style jsx global>{`@media (max-width: 767px) { .landgrid-owner-filter { display: none !important; } }`}</style>
+      <style jsx global>{`
+        .pv-right { padding-top: 330px !important; }
+        @media (max-width: 767px) {
+          .landgrid-owner-filter { display: none !important; }
+          .pv-right { padding-top: 0 !important; }
+        }
+      `}</style>
     </div>
   );
 }
