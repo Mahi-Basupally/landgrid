@@ -13,14 +13,15 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
   const next = requestUrl.searchParams.get('next') ?? '/projects';
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin).replace(/\/$/, '');
+  const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/projects';
+  const siteUrl = requestUrl.origin.replace(/\/$/, '');
 
   if (!code) {
     return NextResponse.redirect(`${siteUrl}/login?error=no_code`);
   }
 
   const cookieStore = await cookies();
-  let response = NextResponse.redirect(`${siteUrl}${next}`);
+  const response = NextResponse.redirect(`${siteUrl}${safeNext}`);
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     cookies: {
@@ -28,20 +29,15 @@ export async function GET(request: Request) {
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          try {
-            cookieStore.set(name, value, options);
-          } catch {
-            // The response cookie below is the important one for the browser.
-          }
-
+        for (const { name, value, options } of cookiesToSet) {
+          cookieStore.set(name, value, options);
           response.cookies.set(name, value, {
             ...options,
             path: '/',
             sameSite: options?.sameSite ?? 'lax',
             secure: requestUrl.protocol === 'https:',
           });
-        });
+        }
       },
     },
   });
