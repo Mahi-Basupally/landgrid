@@ -4,7 +4,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Skip auth entirely for these — returning early prevents any cookie interference
+  // Auth callback must be allowed to exchange the OAuth code and set the
+  // Supabase session cookies without another middleware redirect.
   if (
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/_next/') ||
@@ -22,36 +23,44 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() { return request.cookies.getAll(); },
+        getAll() {
+          return request.cookies.getAll();
+        },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          // Keep both the request and response cookies in sync. This is required
+          // when Supabase refreshes an access token during middleware execution.
+          cookiesToSet.forEach(({ name, value }) => {
+            request.cookies.set(name, value);
+          });
+
           supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              path: '/',
+              sameSite: options?.sameSite ?? 'lax',
+              secure: request.nextUrl.protocol === 'https:',
+            });
+          });
         },
       },
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  // Public project view — no auth needed
+  // Public project view — no auth needed.
   const isProjectView = /^\/projects\/[^/]+$/.test(pathname);
   if (isProjectView) return supabaseResponse;
 
-  // All other routes need auth
+  // All other routes need auth.
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);
-    return NextResponse.redirect(url);
-  }
-
-  // Redirect logged-in users away from login
-  if (pathname === '/login') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/projects';
     return NextResponse.redirect(url);
   }
 
