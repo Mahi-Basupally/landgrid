@@ -24,11 +24,6 @@ function hexToPalette(hex: string): Palette {
   };
 }
 
-const pointKey = (s: string) => s.trim().split(/\s+/).filter(Boolean).map(v => {
-  const [x, y] = v.split(',').map(Number);
-  return `${Math.round(x)},${Math.round(y)}`;
-}).join(' ');
-
 export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
@@ -78,33 +73,46 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     return map;
   }, [owners]);
 
-  // Highlight the real polygons rendered by PlotViewer. This intentionally avoids
-  // a second SVG overlay so zoom, pan, image scaling and section rendering all use
-  // exactly the same coordinate system as the map.
+  // Style the actual polygon belonging to each plot. We identify a plot by the
+  // number rendered inside its SVG group, rather than comparing transformed
+  // coordinates. This stays correct when the map is zoomed, panned, resized,
+  // or when geometry is normalized by PlotViewer.
   useEffect(() => {
     let disposed = false;
     let retryTimer = 0;
+    let observer: MutationObserver | null = null;
     let raf = 0;
+
+    const findPolygonForLot = (svg: SVGSVGElement, lot: Lot): SVGPolygonElement | null => {
+      const wanted = lot.number.trim();
+      if (!wanted) return null;
+      const texts = Array.from(svg.querySelectorAll('text')) as SVGTextElement[];
+      for (const text of texts) {
+        if ((text.textContent || '').trim() !== wanted) continue;
+        const group = text.closest('g');
+        const polygon = group?.querySelector('polygon') as SVGPolygonElement | null;
+        if (polygon) return polygon;
+      }
+      return null;
+    };
 
     const apply = () => {
       if (disposed) return;
-      const svg = document.querySelector('.pv-canvas svg') as SVGSVGElement | null;
+      const svgs = Array.from(document.querySelectorAll('.pv-canvas svg')) as SVGSVGElement[];
+      const svg = svgs.find(s => s.querySelector('polygon')) || null;
       if (!svg || lots.length === 0) {
         retryTimer = window.setTimeout(apply, 100);
         return;
       }
 
-      const polygons = Array.from(svg.querySelectorAll('polygon')) as SVGPolygonElement[];
-      const byPoints = new Map<string, SVGPolygonElement>();
-      polygons.forEach(p => {
-        const key = pointKey(p.getAttribute('points') || '');
-        if (key) byPoints.set(key, p);
+      const polygonByLot = new Map<string, SVGPolygonElement>();
+      lots.forEach(lot => {
+        const polygon = findPolygonForLot(svg, lot);
+        if (polygon) polygonByLot.set(lot.id, polygon);
       });
 
-      // First restore every plot to the normal PlotViewer appearance.
-      lots.forEach(lot => {
-        const polygon = byPoints.get(pointKey(lot.points));
-        if (!polygon) return;
+      // Restore all rendered plots first.
+      polygonByLot.forEach(polygon => {
         polygon.style.removeProperty('fill');
         polygon.style.removeProperty('fill-opacity');
         polygon.style.removeProperty('stroke');
@@ -112,19 +120,19 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
         polygon.style.removeProperty('filter');
       });
 
-      // Then paint every selected owner's plots directly in the map SVG.
+      // Paint every plot belonging to every selected owner.
       selected.forEach(ownerId => {
         const owner = owners.find(o => o.id === ownerId);
         if (!owner) return;
         const palette = colorByOwner.get(ownerId) || paletteFor(0);
         lots.filter(lot => String(lot.ownerId) === ownerId).forEach(lot => {
-          const polygon = byPoints.get(pointKey(lot.points));
+          const polygon = polygonByLot.get(lot.id);
           if (!polygon) return;
           polygon.style.setProperty('fill', palette.base, 'important');
-          polygon.style.setProperty('fill-opacity', '0.88', 'important');
+          polygon.style.setProperty('fill-opacity', '0.90', 'important');
           polygon.style.setProperty('stroke', '#ffffff', 'important');
-          polygon.style.setProperty('stroke-width', '4', 'important');
-          polygon.style.setProperty('filter', `drop-shadow(0 0 5px ${palette.base})`, 'important');
+          polygon.style.setProperty('stroke-width', '5', 'important');
+          polygon.style.setProperty('filter', `drop-shadow(0 0 6px ${palette.base})`, 'important');
         });
       });
     };
@@ -136,7 +144,7 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
 
     schedule();
     const canvas = document.querySelector('.pv-canvas');
-    const observer = canvas ? new MutationObserver(schedule) : null;
+    observer = canvas ? new MutationObserver(schedule) : null;
     observer?.observe(canvas!, { childList: true, subtree: true });
 
     return () => {
