@@ -21,36 +21,22 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
       <PlotViewer projectSlug={projectSlug} />
       <LandGridFilters projectSlug={projectSlug} />
       <style jsx global>{`
-        /* The viewer is the map surface only. It must not create a competing hit-test layer. */
+        /* Keep the application header as the top hit-test layer. */
+        .app-header,
+        .app-header * {
+          position: relative;
+          z-index: 2147483647 !important;
+          pointer-events: auto !important;
+        }
+
         .pv { grid-template-columns: 1fr !important; }
         .pv-left, .pv-right { display: none !important; }
         .pv-canvas { min-width: 0; }
 
-        /* Put the new navigation outside the viewer's stacking context entirely. */
-        .lg-filter-panel {
-          position: fixed !important;
-          z-index: 2147483647 !important;
-          top: 56px !important;
-          bottom: 0 !important;
-          left: 0 !important;
-          pointer-events: auto !important;
-          isolation: isolate;
-        }
+        /* Filters are rendered through a document.body portal. */
+        .lg-filter-panel,
         .lg-info-panel {
-          position: fixed !important;
-          z-index: 2147483647 !important;
-          top: 56px !important;
-          bottom: 0 !important;
-          right: 0 !important;
           pointer-events: auto !important;
-          isolation: isolate;
-        }
-        .lg-filter-panel *, .lg-info-panel * {
-          pointer-events: auto !important;
-        }
-        .lg-filter-heading, .lg-owner-row, .lg-status-row, .lg-plot-row, .lg-clear, .lg-search, .lg-search-wrap button {
-          pointer-events: auto !important;
-          touch-action: manipulation !important;
         }
 
         @media (max-width: 767px) {
