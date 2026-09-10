@@ -1,1 +1,0 @@
-The auth routes must not import readUsers unless lib/auth exports it. This file documents the build mismatch.
