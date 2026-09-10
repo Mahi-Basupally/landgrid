@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BarChart2, LogOut, MessageSquare, Settings } from "lucide-react";
+import { ArrowLeft, BarChart2, LogOut, MessageSquare, Settings, Pencil } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
 
@@ -25,7 +25,6 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
   const displayName = projectName || (slug ? prettySlug(slug) : "");
 
   async function logout() {
-    // POST triggers Supabase signOut + redirect to /login
     const form = document.createElement('form');
     form.method = 'POST'; form.action = '/api/auth/logout';
     document.body.appendChild(form); form.submit();
@@ -33,7 +32,6 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
 
   return (
     <header className="app-header">
-      {/* Left: brand + context */}
       <div className="app-header-left">
         <Link href="/" className="app-brand" aria-label="LandGrid home">
           <span className="app-brand-mark">LG</span>
@@ -60,7 +58,6 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
         )}
       </div>
 
-      {/* Right: actions */}
       <div className="app-header-actions">
         {isEditor && (
           <Link href="/projects" className="app-header-button app-back">
@@ -75,6 +72,11 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
         {isView && (
           <Link href="/projects" className="app-header-button app-back">
             <ArrowLeft size={15} /> Back to Projects
+          </Link>
+        )}
+        {isView && isLoggedIn && slug && (
+          <Link href={`/projects/${encodeURIComponent(slug)}/editor`} className="app-header-button" aria-label="Edit project" title="Edit project">
+            <Pencil size={15} /> Edit
           </Link>
         )}
         {(isEditor || isView || isSettings) && isLoggedIn && slug && (
