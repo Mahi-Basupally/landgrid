@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Users, X } from 'lucide-react';
 
 type Owner = { id: string; name: string; plotNumbers: string[]; color?: string | null };
@@ -25,91 +24,10 @@ function hexToPalette(hex: string): Palette {
   };
 }
 
-const parsePoints = (s: string) => s.trim().split(/\s+/).filter(Boolean).map(v => {
+const pointKey = (s: string) => s.trim().split(/\s+/).filter(Boolean).map(v => {
   const [x, y] = v.split(',').map(Number);
-  return { x, y };
-}).filter(p => Number.isFinite(p.x) && Number.isFinite(p.y));
-
-function OwnerHighlightOverlay({ selected, owners, lots, colors }: {
-  selected: Set<string>; owners: Owner[]; lots: Lot[]; colors: Map<string, Palette>;
-}) {
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  const [viewBox, setViewBox] = useState('0 0 1600 1000');
-
-  useEffect(() => {
-    let disposed = false;
-    let raf = 0;
-    let timer = 0;
-    let positionedCanvas: HTMLElement | null = null;
-    const sync = () => {
-      if (disposed) return;
-      const canvas = document.querySelector('.pv-canvas') as HTMLElement | null;
-      const svg = canvas?.querySelector('svg') as SVGSVGElement | null;
-      if (!canvas || !svg) {
-        timer = window.setTimeout(sync, 100);
-        return;
-      }
-      const position = window.getComputedStyle(canvas).position;
-      if (position === 'static') {
-        canvas.style.position = 'relative';
-        positionedCanvas = canvas;
-      }
-      setHost(canvas);
-      const vb = svg.getAttribute('viewBox');
-      if (vb) setViewBox(vb);
-    };
-    sync();
-    const observer = new MutationObserver(() => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(() => {
-        raf = 0;
-        const svg = document.querySelector('.pv-canvas svg') as SVGSVGElement | null;
-        const vb = svg?.getAttribute('viewBox');
-        if (vb) setViewBox(vb);
-        const canvas = document.querySelector('.pv-canvas') as HTMLElement | null;
-        if (canvas) {
-          if (window.getComputedStyle(canvas).position === 'static') {
-            canvas.style.position = 'relative';
-            positionedCanvas = canvas;
-          }
-          setHost(canvas);
-        }
-      });
-    });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['viewBox'] });
-    return () => {
-      disposed = true;
-      observer.disconnect();
-      if (raf) cancelAnimationFrame(raf);
-      if (timer) clearTimeout(timer);
-      if (positionedCanvas) positionedCanvas.style.position = '';
-    };
-  }, []);
-
-  if (!host || selected.size === 0) return null;
-  const ownerById = new Map(owners.map(o => [o.id, o]));
-  const highlighted = lots.filter(l => l.ownerId && selected.has(String(l.ownerId)) && l.points);
-
-  return createPortal(
-    <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1000, pointerEvents: 'none', overflow: 'visible' }}>
-      {highlighted.map(lot => {
-        const owner = ownerById.get(String(lot.ownerId));
-        if (!owner) return null;
-        const q = parsePoints(lot.points);
-        if (q.length < 3) return null;
-        const palette = colors.get(owner.id) || paletteFor(0);
-        const points = q.map(p => `${p.x},${p.y}`).join(' ');
-        return <g key={lot.id}>
-          <polygon points={points} fill={palette.base} fillOpacity="0.82" stroke="#ffffff" strokeWidth="8"
-            vectorEffect="non-scaling-stroke" paintOrder="stroke" />
-          <polygon points={points} fill={palette.base} fillOpacity="0.72" stroke={palette.dark} strokeWidth="4"
-            vectorEffect="non-scaling-stroke" />
-        </g>;
-      })}
-    </svg>, host
-  );
-}
+  return `${Math.round(x)},${Math.round(y)}`;
+}).join(' ');
 
 export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   const [owners, setOwners] = useState<Owner[]>([]);
@@ -160,19 +78,81 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
     return map;
   }, [owners]);
 
+  // Highlight the real polygons rendered by PlotViewer. This intentionally avoids
+  // a second SVG overlay so zoom, pan, image scaling and section rendering all use
+  // exactly the same coordinate system as the map.
+  useEffect(() => {
+    let disposed = false;
+    let retryTimer = 0;
+    let raf = 0;
+
+    const apply = () => {
+      if (disposed) return;
+      const svg = document.querySelector('.pv-canvas svg') as SVGSVGElement | null;
+      if (!svg || lots.length === 0) {
+        retryTimer = window.setTimeout(apply, 100);
+        return;
+      }
+
+      const polygons = Array.from(svg.querySelectorAll('polygon')) as SVGPolygonElement[];
+      const byPoints = new Map<string, SVGPolygonElement>();
+      polygons.forEach(p => {
+        const key = pointKey(p.getAttribute('points') || '');
+        if (key) byPoints.set(key, p);
+      });
+
+      // First restore every plot to the normal PlotViewer appearance.
+      lots.forEach(lot => {
+        const polygon = byPoints.get(pointKey(lot.points));
+        if (!polygon) return;
+        polygon.style.removeProperty('fill');
+        polygon.style.removeProperty('fill-opacity');
+        polygon.style.removeProperty('stroke');
+        polygon.style.removeProperty('stroke-width');
+        polygon.style.removeProperty('filter');
+      });
+
+      // Then paint every selected owner's plots directly in the map SVG.
+      selected.forEach(ownerId => {
+        const owner = owners.find(o => o.id === ownerId);
+        if (!owner) return;
+        const palette = colorByOwner.get(ownerId) || paletteFor(0);
+        lots.filter(lot => String(lot.ownerId) === ownerId).forEach(lot => {
+          const polygon = byPoints.get(pointKey(lot.points));
+          if (!polygon) return;
+          polygon.style.setProperty('fill', palette.base, 'important');
+          polygon.style.setProperty('fill-opacity', '0.88', 'important');
+          polygon.style.setProperty('stroke', '#ffffff', 'important');
+          polygon.style.setProperty('stroke-width', '4', 'important');
+          polygon.style.setProperty('filter', `drop-shadow(0 0 5px ${palette.base})`, 'important');
+        });
+      });
+    };
+
+    const schedule = () => {
+      if (raf) return;
+      raf = window.requestAnimationFrame(() => { raf = 0; apply(); });
+    };
+
+    schedule();
+    const canvas = document.querySelector('.pv-canvas');
+    const observer = canvas ? new MutationObserver(schedule) : null;
+    observer?.observe(canvas!, { childList: true, subtree: true });
+
+    return () => {
+      disposed = true;
+      observer?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [lots, owners, selected, colorByOwner]);
+
   const toggle = (id: string) => {
-    const owner = owners.find(o => o.id === id);
     setSelected(current => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-    if (owner) {
-      const wasSelected = selected.has(id);
-      window.alert(
-        `LANDGRID OWNER FILTER TEST\n\n${wasSelected ? 'Deselected' : 'Selected'} owner: ${owner.name}\nAssigned plots: ${owner.plotNumbers.length}\n\nIf you see this alert, the new owner-filter code is running.`
-      );
-    }
   };
   const clear = () => setSelected(new Set());
 
@@ -188,32 +168,29 @@ export default function OwnerFilter({ projectSlug }: { projectSlug: string }) {
   }
 
   return (
-    <>
-      <OwnerHighlightOverlay selected={selected} owners={owners} lots={lots} colors={colorByOwner} />
-      <div className="landgrid-owner-filter" style={{ position: 'absolute', top: 0, right: 0, width: 330, zIndex: 30, background: 'rgba(255,255,255,.98)', borderBottom: '1px solid #e2e8f0', boxShadow: '0 6px 20px rgba(15,23,42,.08)', backdropFilter: 'blur(12px)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 10px' }}>
-          <button onClick={() => setOpen(v => !v)} style={{ border: 0, background: 'transparent', padding: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: '#172033' }}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center', background: '#eff6ff', color: '#2563eb' }}><Users size={15} /></span>
-            <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 11, letterSpacing: .8, fontWeight: 900, color: '#64748b' }}>OWNERS</span><span style={{ display: 'block', fontSize: 13, fontWeight: 850 }}>Highlight by owner</span></span>
-            <ChevronDown size={15} style={{ marginLeft: 2, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .2s' }} />
-          </button>
-          {selected.size > 0 && <button onClick={clear} style={{ border: 0, background: '#f8fafc', color: '#475569', borderRadius: 7, padding: '5px 7px', cursor: 'pointer', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>}
-        </div>
-        {open && <div style={{ borderTop: '1px solid #f1f5f9', padding: '7px 10px 10px', maxHeight: 310, overflowY: 'auto' }}>
-          {loading ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>Loading owners…</div> : owners.length === 0 ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>No plot owners assigned.</div> : owners.map((owner, index) => {
-            const palette = paletteForOwner(owner, index);
-            const checked = selected.has(owner.id);
-            const hex = /^#[0-9a-f]{6}$/i.test(owner.color || '') ? owner.color!.toUpperCase() : '#2563EB';
-            return <div key={owner.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px', borderRadius: 8, background: checked ? `${palette.light}66` : 'transparent', border: checked ? `1px solid ${palette.light}` : '1px solid transparent' }}>
-              <button type="button" onClick={() => toggle(owner.id)} aria-label={`Highlight ${owner.name}`} style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'grid', placeItems: 'center', border: `1.5px solid ${checked ? palette.dark : '#cbd5e1'}`, background: checked ? palette.base : '#fff', color: '#fff', boxShadow: checked ? `0 2px 6px ${palette.base}55` : 'none', cursor: 'pointer', padding: 0 }}>{checked && <Check size={12} strokeWidth={3} />}</button>
-              <input aria-label={`Color for ${owner.name}`} type="color" value={hex} onChange={e => void changeColor(owner.id, e.target.value)} style={{ width: 24, height: 24, padding: 0, border: 0, borderRadius: 5, cursor: 'pointer', background: 'transparent' }} title="Choose owner color" />
-              <span style={{ minWidth: 0, flex: 1, fontSize: 12, fontWeight: 750, color: '#243047', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner.name}</span>
-              <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{owner.plotNumbers.length}</span>
-            </div>;
-          })}
-          {selected.size > 0 && <div style={{ marginTop: 7, padding: '7px 9px', borderRadius: 7, background: '#f8fafc', color: '#64748b', fontSize: 10, lineHeight: 1.4 }}>Selected owners are highlighted directly on the map. Multiple owners can be selected at the same time.</div>}
-        </div>}
+    <div className="landgrid-owner-filter" style={{ position: 'absolute', top: 0, right: 0, width: 330, zIndex: 30, background: 'rgba(255,255,255,.98)', borderBottom: '1px solid #e2e8f0', boxShadow: '0 6px 20px rgba(15,23,42,.08)', backdropFilter: 'blur(12px)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 10px' }}>
+        <button onClick={() => setOpen(v => !v)} style={{ border: 0, background: 'transparent', padding: 0, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: '#172033' }}>
+          <span style={{ width: 28, height: 28, borderRadius: 8, display: 'grid', placeItems: 'center', background: '#eff6ff', color: '#2563eb' }}><Users size={15} /></span>
+          <span style={{ textAlign: 'left' }}><span style={{ display: 'block', fontSize: 11, letterSpacing: .8, fontWeight: 900, color: '#64748b' }}>OWNERS</span><span style={{ display: 'block', fontSize: 13, fontWeight: 850 }}>Highlight by owner</span></span>
+          <ChevronDown size={15} style={{ marginLeft: 2, transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .2s' }} />
+        </button>
+        {selected.size > 0 && <button onClick={clear} style={{ border: 0, background: '#f8fafc', color: '#475569', borderRadius: 7, padding: '5px 7px', cursor: 'pointer', fontSize: 10, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}><X size={12} /> Clear</button>}
       </div>
-    </>
+      {open && <div style={{ borderTop: '1px solid #f1f5f9', padding: '7px 10px 10px', maxHeight: 310, overflowY: 'auto' }}>
+        {loading ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>Loading owners…</div> : owners.length === 0 ? <div style={{ padding: 12, color: '#94a3b8', fontSize: 11 }}>No plot owners assigned.</div> : owners.map((owner, index) => {
+          const palette = paletteForOwner(owner, index);
+          const checked = selected.has(owner.id);
+          const hex = /^#[0-9a-f]{6}$/i.test(owner.color || '') ? owner.color!.toUpperCase() : '#2563EB';
+          return <div key={owner.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px', borderRadius: 8, background: checked ? `${palette.light}66` : 'transparent', border: checked ? `1px solid ${palette.light}` : '1px solid transparent' }}>
+            <button type="button" onClick={() => toggle(owner.id)} aria-label={`Highlight ${owner.name}`} style={{ width: 18, height: 18, borderRadius: 5, flexShrink: 0, display: 'grid', placeItems: 'center', border: `1.5px solid ${checked ? palette.dark : '#cbd5e1'}`, background: checked ? palette.base : '#fff', color: '#fff', boxShadow: checked ? `0 2px 6px ${palette.base}55` : 'none', cursor: 'pointer', padding: 0 }}>{checked && <Check size={12} strokeWidth={3} />}</button>
+            <input aria-label={`Color for ${owner.name}`} type="color" value={hex} onChange={e => void changeColor(owner.id, e.target.value)} style={{ width: 24, height: 24, padding: 0, border: 0, borderRadius: 5, cursor: 'pointer', background: 'transparent' }} title="Choose owner color" />
+            <span style={{ minWidth: 0, flex: 1, fontSize: 12, fontWeight: 750, color: '#243047', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{owner.name}</span>
+            <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{owner.plotNumbers.length}</span>
+          </div>;
+        })}
+        {selected.size > 0 && <div style={{ marginTop: 7, padding: '7px 9px', borderRadius: 7, background: '#f8fafc', color: '#64748b', fontSize: 10, lineHeight: 1.4 }}>Selected owners are highlighted directly on the map. Multiple owners can be selected at the same time.</div>}
+      </div>}
+    </div>
   );
 }
