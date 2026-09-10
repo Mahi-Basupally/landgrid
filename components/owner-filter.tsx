@@ -40,6 +40,7 @@ function OwnerHighlightOverlay({ selected, owners, lots, colors }: {
     let disposed = false;
     let raf = 0;
     let timer = 0;
+    let positionedCanvas: HTMLElement | null = null;
     const sync = () => {
       if (disposed) return;
       const canvas = document.querySelector('.pv-canvas') as HTMLElement | null;
@@ -47,6 +48,11 @@ function OwnerHighlightOverlay({ selected, owners, lots, colors }: {
       if (!canvas || !svg) {
         timer = window.setTimeout(sync, 100);
         return;
+      }
+      const position = window.getComputedStyle(canvas).position;
+      if (position === 'static') {
+        canvas.style.position = 'relative';
+        positionedCanvas = canvas;
       }
       setHost(canvas);
       const vb = svg.getAttribute('viewBox');
@@ -61,11 +67,23 @@ function OwnerHighlightOverlay({ selected, owners, lots, colors }: {
         const vb = svg?.getAttribute('viewBox');
         if (vb) setViewBox(vb);
         const canvas = document.querySelector('.pv-canvas') as HTMLElement | null;
-        if (canvas) setHost(canvas);
+        if (canvas) {
+          if (window.getComputedStyle(canvas).position === 'static') {
+            canvas.style.position = 'relative';
+            positionedCanvas = canvas;
+          }
+          setHost(canvas);
+        }
       });
     });
     observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['viewBox'] });
-    return () => { disposed = true; observer.disconnect(); if (raf) cancelAnimationFrame(raf); if (timer) clearTimeout(timer); };
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+      if (timer) clearTimeout(timer);
+      if (positionedCanvas) positionedCanvas.style.position = '';
+    };
   }, []);
 
   if (!host || selected.size === 0) return null;
@@ -74,16 +92,20 @@ function OwnerHighlightOverlay({ selected, owners, lots, colors }: {
 
   return createPortal(
     <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" aria-hidden="true"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 4, pointerEvents: 'none' }}>
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1000, pointerEvents: 'none', overflow: 'visible' }}>
       {highlighted.map(lot => {
         const owner = ownerById.get(String(lot.ownerId));
         if (!owner) return null;
         const q = parsePoints(lot.points);
         if (q.length < 3) return null;
         const palette = colors.get(owner.id) || paletteFor(0);
-        return <polygon key={lot.id} points={q.map(p => `${p.x},${p.y}`).join(' ')}
-          fill={palette.base} fillOpacity="0.68" stroke={palette.dark} strokeWidth="4"
-          vectorEffect="non-scaling-stroke" />;
+        const points = q.map(p => `${p.x},${p.y}`).join(' ');
+        return <g key={lot.id}>
+          <polygon points={points} fill={palette.base} fillOpacity="0.82" stroke="#ffffff" strokeWidth="8"
+            vectorEffect="non-scaling-stroke" paintOrder="stroke" />
+          <polygon points={points} fill={palette.base} fillOpacity="0.72" stroke={palette.dark} strokeWidth="4"
+            vectorEffect="non-scaling-stroke" />
+        </g>;
       })}
     </svg>, host
   );
