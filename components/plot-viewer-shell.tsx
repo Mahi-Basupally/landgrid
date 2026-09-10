@@ -21,11 +21,11 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
       <PlotViewer projectSlug={projectSlug} />
       <LandGridFilters projectSlug={projectSlug} />
       <style jsx global>{`
-        .pv { grid-template-columns: 1fr !important; }
+        .pv { grid-template-columns: 1fr !important; pointer-events: none !important; }
         .pv-left, .pv-right { display: none !important; }
-        .pv-canvas { min-width: 0; position: relative; z-index: 0 !important; }
+        .pv-canvas { min-width: 0; position: relative; z-index: 0 !important; pointer-events: auto !important; }
 
-        /* The filter UI is a true overlay layer. The map must never intercept clicks intended for it. */
+        /* Keep the map interactive while ensuring it can never sit above the filter UI. */
         .lg-filter-panel, .lg-info-panel {
           position: absolute !important;
           z-index: 2147483647 !important;
