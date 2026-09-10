@@ -31,7 +31,12 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
 
         .pv { grid-template-columns: 1fr !important; }
         .pv-left, .pv-right { display: none !important; }
-        .pv-canvas { min-width: 0; }
+        .pv-canvas { min-width: 0; z-index: 0 !important; }
+
+        /* The map SVG must stay below the fixed navigation and application header. */
+        .pv-canvas > svg {
+          z-index: 0 !important;
+        }
 
         /* Filters are rendered through a document.body portal. */
         .lg-filter-panel,
