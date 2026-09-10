@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ArrowLeft, BarChart2, LogOut, MessageSquare, Settings, Pencil } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
@@ -33,10 +32,10 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
   return (
     <header className="app-header">
       <div className="app-header-left">
-        <Link href="/" className="app-brand" aria-label="LandGrid home">
+        <a href="/" className="app-brand" aria-label="LandGrid home">
           <span className="app-brand-mark">LG</span>
           <strong>LANDGRID</strong>
-        </Link>
+        </a>
         {(isEditor || isSettings || isView) && displayName && (
           <>
             <span className="app-divider" />
@@ -60,34 +59,34 @@ export default function AppHeader({ projectName, message = "", isLoggedIn = true
 
       <div className="app-header-actions">
         {isEditor && (
-          <Link href="/projects" className="app-header-button app-back">
+          <a href="/projects" className="app-header-button app-back">
             <ArrowLeft size={15} /> Back to Projects
-          </Link>
+          </a>
         )}
         {isSettings && slug && (
-          <Link href={`/projects/${encodeURIComponent(slug)}/editor`} className="app-header-button app-back">
+          <a href={`/projects/${encodeURIComponent(slug)}/editor`} className="app-header-button app-back">
             <ArrowLeft size={15} /> Back to Editor
-          </Link>
+          </a>
         )}
         {isView && (
-          <Link href="/projects" className="app-header-button app-back">
+          <a href="/projects" className="app-header-button app-back">
             <ArrowLeft size={15} /> Back to Projects
-          </Link>
+          </a>
         )}
         {isView && isLoggedIn && slug && (
-          <Link href={`/projects/${encodeURIComponent(slug)}/editor`} className="app-header-button" aria-label="Edit project" title="Edit project">
+          <a href={`/projects/${encodeURIComponent(slug)}/editor`} className="app-header-button" aria-label="Edit project" title="Edit project">
             <Pencil size={15} /> Edit
-          </Link>
+          </a>
         )}
         {(isEditor || isView || isSettings) && isLoggedIn && slug && (
-          <Link href={`/projects/${encodeURIComponent(slug)}/report`} className="app-icon-button" aria-label="Owners Report" title="Owners Report">
+          <a href={`/projects/${encodeURIComponent(slug)}/report`} className="app-icon-button" aria-label="Owners Report" title="Owners Report">
             <BarChart2 size={16} />
-          </Link>
+          </a>
         )}
         {(isEditor || isSettings || (isView && isLoggedIn)) && slug && (
-          <Link href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings">
+          <a href={`/projects/${encodeURIComponent(slug)}/settings`} className="app-icon-button" aria-label="Settings">
             <Settings size={16} />
-          </Link>
+          </a>
         )}
         {isLoggedIn && <button type="button" className="app-icon-button" onClick={() => void logout()} aria-label="Log out">
           <LogOut size={16} />
