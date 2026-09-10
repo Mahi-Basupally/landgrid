@@ -78,8 +78,10 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
   }, [lots, selectedOwners, owners, ownerById]);
 
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      const g = (e.target as Element | null)?.closest?.('g'); if (!g) return;
+    const onClick = (e: Event) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      const g = target.closest('g'); if (!g) return;
       const text = Array.from(g.querySelectorAll('text')).find(t => !t.hasAttribute('data-landgrid-yard'))?.textContent?.trim();
       if (text) setSelectedPlot(lots.find(l => l.number === text) || null);
     };
