@@ -1,0 +1,13 @@
+/* Public project viewer: frosted-glass plots. */
+main[style*="background: rgb(217, 222, 229)"] svg polygon[stroke-width="2"] {
+  fill: rgba(255,255,255,.16) !important;
+  stroke: rgba(255,255,255,.82) !important;
+  stroke-width: 1.5 !important;
+  filter: drop-shadow(0 1px 3px rgba(15,23,42,.18));
+}
+main[style*="background: rgb(217, 222, 229)"] svg polygon[stroke-width="4"] {
+  fill: rgba(234,179,8,.34) !important;
+  stroke: rgba(202,138,4,.95) !important;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 2px 7px rgba(202,138,4,.38));
+}
