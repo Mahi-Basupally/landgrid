@@ -24,6 +24,9 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
         .pv { grid-template-columns: 1fr !important; }
         .pv-left, .pv-right { display: none !important; }
         .pv-canvas { min-width: 0; }
+        /* Keep the new filter/info panels above the map so all controls receive clicks. */
+        .lg-filter-panel, .lg-info-panel { z-index: 1000 !important; pointer-events: auto !important; }
+        .lg-filter-panel *, .lg-info-panel * { pointer-events: auto; }
         @media (max-width: 767px) {
           .lg-filter-panel { top: auto; bottom: 58px; height: auto; max-height: 70vh; border-right: 0; border-radius: 0 14px 0 0; box-shadow: 0 -4px 18px rgba(15,23,42,.12); }
           .lg-info-panel { display: none !important; }
