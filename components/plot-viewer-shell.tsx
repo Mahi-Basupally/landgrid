@@ -2,7 +2,7 @@
 import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useHeader } from '@/lib/header-context';
-import OwnerFilter from './owner-filter';
+import LandGridFilters from './landgrid-filters';
 
 const PlotViewer = dynamic(() => import('./plot-viewer'), {
   ssr: false,
@@ -15,31 +15,18 @@ const PlotViewer = dynamic(() => import('./plot-viewer'), {
 
 export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn = false }: { projectSlug: string; projectName: string; isLoggedIn?: boolean }) {
   const { setState } = useHeader();
-  useEffect(() => { setState({ projectName, isLoggedIn }); }, [projectName, isLoggedIn]);
+  useEffect(() => { setState({ projectName, isLoggedIn }); }, [projectName, isLoggedIn, setState]);
   return (
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <PlotViewer projectSlug={projectSlug} />
-      <OwnerFilter projectSlug={projectSlug} />
+      <LandGridFilters projectSlug={projectSlug} />
       <style jsx global>{`
-        /* Desktop: keep every filter/find control on the left and property/report information on the right. */
-        .landgrid-owner-filter {
-          left: 8px !important;
-          right: auto !important;
-          top: 320px !important;
-          width: 244px !important;
-          max-height: calc(100% - 328px) !important;
-        }
-        .landgrid-owner-filter > div:first-child > b {
-          font-size: 0 !important;
-        }
-        .landgrid-owner-filter > div:first-child > b::after {
-          content: 'Filters & Find';
-          font-size: 13px;
-        }
-        .pv-right { padding-top: 0 !important; }
+        .pv { grid-template-columns: 1fr !important; }
+        .pv-left, .pv-right { display: none !important; }
+        .pv-canvas { min-width: 0; }
         @media (max-width: 767px) {
-          .landgrid-owner-filter { display: none !important; }
-          .pv-right { padding-top: 0 !important; }
+          .lg-filter-panel { top: auto; bottom: 58px; height: auto; max-height: 70vh; border-right: 0; border-radius: 0 14px 0 0; box-shadow: 0 -4px 18px rgba(15,23,42,.12); }
+          .lg-info-panel { display: none !important; }
         }
       `}</style>
     </div>
