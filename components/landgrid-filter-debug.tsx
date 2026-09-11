@@ -34,6 +34,21 @@ export default function LandGridFilterDebug() {
       const now = performance.now();
       const delta = last.current[label] == null ? null : Math.round(now - last.current[label]);
       last.current[label] = now;
+
+      const ownerRow = target.closest('.lg-owner-row') as HTMLButtonElement | null;
+      if (ownerRow && pointerEvent.button === 0) {
+        // Some browsers/platform combinations can deliver pointerdown to the
+        // row but fail to synthesize the React onClick. Trigger the row action
+        // immediately and suppress the follow-up native click so it toggles once.
+        pointerEvent.preventDefault();
+        ownerRow.click();
+        console.info('[LandGrid Debug] OWNER TOGGLE', {
+          label,
+          owner: ownerRow.textContent?.trim(),
+          activeAfter: ownerRow.classList.contains('active'),
+        });
+      }
+
       console.info('[LandGrid Debug] POINTERDOWN', {
         label,
         attempt: attempts.current[label],
