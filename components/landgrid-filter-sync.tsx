@@ -9,68 +9,111 @@ export default function LandGridFilterSync() {
   useEffect(() => {
     const root = document.body;
     const statusColors: Record<string, string> = {
-      available: 'rgb(22, 163, 74)', reserved: 'rgb(202, 138, 4)',
-      sold: 'rgb(220, 38, 38)', hold: 'rgb(100, 116, 139)',
+      available: 'rgb(22, 163, 74)',
+      reserved: 'rgb(202, 138, 4)',
+      sold: 'rgb(220, 38, 38)',
+      hold: 'rgb(100, 116, 139)',
     };
 
+    const normalize = (value: string) => value.replace(/\s+/g, ' ').trim().toLowerCase();
+
     const readState = () => {
-      const panel = document.querySelector('.lg-filter-panel');
+      const panel = document.querySelector('.lg-filter-panel') || document.querySelector('.lg-left-panel');
       if (!panel) return;
 
-      const selectedOwners = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-owner-row'))
+      // landgrid-filters.tsx renders owner rows as .lg-owner.
+      // The previous .lg-owner-row selector never matched the real DOM.
+      const selectedOwners = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-owner'))
         .filter(b => b.classList.contains('active'))
         .map(b => {
-          const dot = b.querySelector('.lg-owner-dot');
+          const dot = b.querySelector('.lg-dot');
+          const nameNode = Array.from(b.querySelectorAll('span')).find(
+            span => !span.classList.contains('lg-dot') && !span.classList.contains('lg-check'),
+          );
           return {
-            name: (b.querySelector('span:nth-child(2)')?.textContent || '').trim().toLowerCase(),
+            name: normalize(nameNode?.textContent || ''),
             color: dot ? getComputedStyle(dot).backgroundColor : '#2563eb',
           };
-        });
-      const statusButton = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-status-row'))
-        .find(b => getComputedStyle(b).backgroundColor === 'rgb(23, 37, 84)');
-      const status = statusButton?.textContent?.trim().split(/\s+/)[0]?.toLowerCase() || 'all';
-      const query = (panel.querySelector<HTMLInputElement>('.lg-search')?.value || '').trim().toLowerCase();
+        })
+        .filter(o => o.name);
+
+      const statusButton = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-status'))
+        .find(b => b.classList.contains('active'));
+      const status = normalize(statusButton?.textContent || '').split(/\s+/)[0] || 'all';
+      const query = normalize(panel.querySelector<HTMLInputElement>('.lg-search-wrap input')?.value || '');
 
       const plotMeta = new Map<string, LotMeta>();
-      panel.querySelectorAll<HTMLButtonElement>('.lg-plot-row').forEach(row => {
-        const number = (row.querySelector('div > div')?.textContent || '').replace(/^Plot\s+/i, '').trim();
-        const meta = (row.querySelector('.meta')?.textContent || '').trim();
-        const dot = row.querySelector('span');
-        if (number) plotMeta.set(number, { number, owner: meta.split(' · ')[0].toLowerCase(), color: dot ? getComputedStyle(dot).backgroundColor : '' });
+      panel.querySelectorAll<HTMLButtonElement>('.lg-plot').forEach(row => {
+        const number = normalize(
+          row.querySelector('b')?.textContent?.replace(/^Plot\s+/i, '') || '',
+        );
+        const spans = Array.from(row.querySelectorAll('span'));
+        const details = spans.find(s => s.querySelector('small'))?.querySelector('small')?.textContent || '';
+        const parts = details.split(' · ');
+        const dot = row.querySelector('.lg-dot');
+        if (number) {
+          plotMeta.set(number, {
+            number,
+            owner: normalize(parts[0] || ''),
+            color: dot ? getComputedStyle(dot).backgroundColor : '',
+          });
+        }
       });
 
       const svg = Array.from(document.querySelectorAll<SVGSVGElement>('.pv-canvas svg')).find(s => s.querySelector('polygon'));
       if (!svg) return;
+
       svg.querySelectorAll<SVGGElement>('g').forEach(group => {
-        const label = Array.from(group.querySelectorAll('text')).find(t => !t.hasAttribute('data-landgrid-yard'))?.textContent?.trim();
+        const label = normalize(
+          Array.from(group.querySelectorAll('text'))
+            .find(t => !t.hasAttribute('data-landgrid-yard') && !t.hasAttribute('data-landgrid-yard-label'))
+            ?.textContent || '',
+        );
         if (!label) return;
+
         const poly = group.querySelector<SVGPolygonElement>('polygon');
         if (!poly) return;
+
         const meta = plotMeta.get(label);
-        const ownerMatch = selectedOwners.find(o => meta?.owner === o.name);
-        const searchMatch = !query || label.toLowerCase().includes(query) || (meta?.owner || '').includes(query);
+        const ownerMatch = meta ? selectedOwners.find(o => o.name === meta.owner) : undefined;
+        const searchMatch = !query || label.includes(query) || (meta?.owner || '').includes(query);
         const statusMatch = status === 'all' || statusColors[status] === meta?.color;
         const filteredOut = Boolean(query || status !== 'all') && (!searchMatch || !statusMatch);
-        poly.style.setProperty('fill', ownerMatch?.color || '');
-        poly.style.setProperty('fill-opacity', ownerMatch ? '.88' : filteredOut ? '.12' : '');
-        poly.style.setProperty('stroke', ownerMatch ? '#fff' : '');
-        poly.style.setProperty('stroke-width', ownerMatch ? '5' : '');
-        poly.style.setProperty('filter', ownerMatch ? 'drop-shadow(0 0 6px rgba(15,23,42,.28))' : '');
+
+        if (ownerMatch) {
+          poly.style.setProperty('fill', ownerMatch.color, 'important');
+          poly.style.setProperty('fill-opacity', '.88', 'important');
+          poly.style.setProperty('stroke', '#fff', 'important');
+          poly.style.setProperty('stroke-width', '5', 'important');
+          poly.style.setProperty('filter', 'drop-shadow(0 0 6px rgba(15,23,42,.28))', 'important');
+        } else {
+          poly.style.removeProperty('fill');
+          poly.style.setProperty('fill-opacity', filteredOut ? '.12' : '', 'important');
+          poly.style.removeProperty('stroke');
+          poly.style.removeProperty('stroke-width');
+          poly.style.removeProperty('filter');
+        }
       });
     };
 
     let frame = 0;
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(readState); };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(readState);
+    };
     const observer = new MutationObserver(schedule);
     observer.observe(root, { childList: true, subtree: true });
     root.addEventListener('input', schedule, true);
     root.addEventListener('click', schedule, true);
     schedule();
+
     return () => {
-      cancelAnimationFrame(frame); observer.disconnect();
+      cancelAnimationFrame(frame);
+      observer.disconnect();
       root.removeEventListener('input', schedule, true);
       root.removeEventListener('click', schedule, true);
     };
   }, []);
+
   return null;
 }
