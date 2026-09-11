@@ -7,39 +7,33 @@ import LandGridFilters from './landgrid-filters';
 const PlotViewer = dynamic(() => import('./plot-viewer'), { ssr: false, loading: () => <div style={{height:'100%',display:'grid',placeItems:'center',color:'#64748b'}}>Loading plan…</div> });
 
 type BridgeLot={number:string;ownerId:string|null};
+type BridgeOwner={id:string;name:string};
 function NativeOwnerMapBridge({projectSlug}:{projectSlug:string}){
   useEffect(()=>{
-    let lots:BridgeLot[]=[];
-    let disposed=false;
-    const load=async()=>{try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`,{cache:'no-store'});const d=await r.json();if(!disposed)lots=(d.lots||[]).map((l:any)=>({number:String(l.number??''),ownerId:l.ownerId==null?null:String(l.ownerId)}));}catch{}};
+    let lots:BridgeLot[]=[]; let owners:BridgeOwner[]=[]; let disposed=false;
+    const load=async()=>{try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`,{cache:'no-store'});const d=await r.json();if(!disposed){lots=(d.lots||[]).map((l:any)=>({number:String(l.number??''),ownerId:l.ownerId==null?null:String(l.ownerId)}));owners=(d.owners||[]).map((o:any)=>({id:String(o.id),name:String(o.name||'')}));}}catch{}};
     void load();
+    const ownerName=(id:string|null)=>owners.find(o=>o.id===id)?.name.toLowerCase()||'';
     const apply=()=>{
       const panel=document.querySelector('.lg-left-panel');
       const svg=Array.from(document.querySelectorAll<SVGSVGElement>('.pv-canvas svg')).find(s=>s.querySelector('polygon'));
-      if(!panel||!svg)return;
+      if(!panel||!svg||!lots.length)return;
       const active=new Map<string,string>();
-      panel.querySelectorAll<HTMLButtonElement>('.lg-owner.active').forEach(row=>{
-        const name=(row.querySelector('.lg-owner-name')?.textContent||row.textContent||'').trim().toLowerCase();
-        const color=getComputedStyle(row.querySelector('.lg-owner-dot')||row).backgroundColor;
-        if(name)active.set(name,color);
-      });
+      panel.querySelectorAll<HTMLButtonElement>('.lg-owner.active').forEach(row=>{const name=(row.querySelector('.lg-owner-name')?.textContent||row.textContent||'').trim().toLowerCase();const color=getComputedStyle(row.querySelector('.lg-owner-dot')||row).backgroundColor;if(name)active.set(name,color);});
       svg.querySelectorAll<SVGGElement>('g').forEach(group=>{
         const label=Array.from(group.querySelectorAll('text')).find(t=>!t.hasAttribute('data-landgrid-yard'))?.textContent?.trim();
-        const poly=group.querySelector<SVGPolygonElement>('polygon');
-        if(!label||!poly)return;
-        const lot=lots.find(l=>l.number===label);
-        const ownerRow=lot?.ownerId?Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-owner')).find(r=>r.dataset.ownerId===lot.ownerId):undefined;
-        const ownerName=(ownerRow?.querySelector('.lg-owner-name')?.textContent||'').trim().toLowerCase();
-        const color=ownerName?active.get(ownerName):undefined;
+        const poly=group.querySelector<SVGPolygonElement>('polygon'); if(!label||!poly)return;
+        const lot=lots.find(l=>l.number===label); const name=ownerName(lot?.ownerId||null); const color=active.get(name);
         if(color){poly.style.setProperty('fill',color,'important');poly.style.setProperty('fill-opacity','.9','important');poly.style.setProperty('stroke','#fff','important');poly.style.setProperty('stroke-width','5','important');poly.style.setProperty('filter',`drop-shadow(0 0 6px ${color})`,'important');}
         else{poly.style.removeProperty('fill');poly.style.removeProperty('stroke');poly.style.removeProperty('stroke-width');poly.style.removeProperty('filter');}
       });
     };
-    const click=(e:Event)=>{const t=e.target;if(!(t instanceof Element))return;const row=t.closest<HTMLButtonElement>('.lg-owner');if(!row)return;const before=row.classList.contains('active');window.setTimeout(()=>{if(row.classList.contains('active')===before){const now=!before;row.classList.toggle('active',now);const check=row.querySelector('.lg-check');if(check)check.textContent=now?'✓':'';}apply();},80);};
+    const click=(e:Event)=>{const t=e.target;if(!(t instanceof Element))return;const row=t.closest<HTMLButtonElement>('.lg-owner');if(!row)return;const before=row.classList.contains('active');window.setTimeout(()=>{if(row.classList.contains('active')===before){const now=!before;row.classList.toggle('active',now);const check=row.querySelector('.lg-check');if(check)check.textContent=now?'✓':'';}apply();},100);};
     document.addEventListener('click',click,true);
-    const observer=new MutationObserver(()=>apply());
-    const timer=window.setInterval(()=>{const p=document.querySelector('.lg-left-panel');if(p&&!observer.takeRecords())observer.observe(p,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});apply();},300);
-    return()=>{disposed=true;document.removeEventListener('click',click,true);observer.disconnect();window.clearInterval(timer);};
+    let observer:MutationObserver|undefined;
+    const attach=()=>{const panel=document.querySelector('.lg-left-panel');if(panel&&!observer){observer=new MutationObserver(()=>apply());observer.observe(panel,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});}apply();};
+    const timer=window.setInterval(attach,250); attach();
+    return()=>{disposed=true;document.removeEventListener('click',click,true);observer?.disconnect();window.clearInterval(timer);};
   },[projectSlug]);
   return null;
 }
