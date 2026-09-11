@@ -38,7 +38,10 @@ export default function LandGridFilterDebug() {
       const delta = last.current[label] == null ? null : Math.round(now - last.current[label]);
       last.current[label] = now;
 
-      const ownerRow = target.closest('.lg-owner-row') as HTMLElement | null;
+      // Owner rows are rendered by landgrid-filters.tsx as .lg-owner.
+      // Keep the fallback aligned with the real DOM class so it can recover
+      // from browsers/components that suppress the React click handler.
+      const ownerRow = target.closest('.lg-owner') as HTMLButtonElement | null;
       if (ownerRow && pointerEvent.button === 0) {
         ownerClickSeen.delete(ownerRow);
         const oldTimer = pendingOwnerClicks.get(ownerRow);
@@ -71,7 +74,7 @@ export default function LandGridFilterDebug() {
       const mouseEvent = event as MouseEvent;
       const target = mouseEvent.target;
       if (!(target instanceof Element)) return;
-      const ownerRow = target.closest('.lg-owner-row');
+      const ownerRow = target.closest('.lg-owner');
       if (ownerRow) {
         ownerClickSeen.add(ownerRow);
         const timer = pendingOwnerClicks.get(ownerRow);
