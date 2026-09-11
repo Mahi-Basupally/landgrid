@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Search, X } from 'lucide-react';
 
 type Owner = { id: string; name: string; color?: string | null };
@@ -14,6 +14,7 @@ type Lot = {
   price?: number | string | null;
   direction?: string;
 };
+
 type OpenState = { owner: boolean; status: boolean; plots: boolean; search: boolean };
 
 const STATUS: Record<string, { label: string; dot: string }> = {
@@ -23,24 +24,22 @@ const STATUS: Record<string, { label: string; dot: string }> = {
   hold: { label: 'Hold', dot: '#64748b' },
 };
 
-const FALLBACK_COLORS = ['#ef4444', '#facc15', '#e879f9', '#22c55e', '#d97732', '#38bdf8', '#a78bfa', '#14b8a6'];
+const COLORS = ['#ef4444', '#facc15', '#e879f9', '#22c55e', '#d97732', '#38bdf8', '#a78bfa', '#14b8a6'];
 
-function normalize(value: unknown) {
-  return String(value ?? '').trim().toLowerCase();
+const norm = (value: unknown) => String(value ?? '').trim().toLowerCase();
+
+function colorFor(owner: Owner, index: number) {
+  return owner.color || COLORS[index % COLORS.length];
 }
 
-function ownerColor(owner: Owner, index: number) {
-  return owner.color || FALLBACK_COLORS[index % FALLBACK_COLORS.length];
-}
-
-function findMapSvg() {
+function getMapSvg() {
   return Array.from(document.querySelectorAll<SVGSVGElement>('.pv-canvas svg')).find(svg => svg.querySelector('polygon')) || null;
 }
 
-function getLotNumber(group: SVGGElement) {
-  const text = Array.from(group.querySelectorAll('text')).find(t => {
-    const value = (t.textContent || '').trim();
-    return value && !t.hasAttribute('data-landgrid-yard') && !t.hasAttribute('data-landgrid-yard-label');
+function getPlotNumber(group: SVGGElement) {
+  const text = Array.from(group.querySelectorAll('text')).find(node => {
+    const value = (node.textContent || '').trim();
+    return value && !node.hasAttribute('data-landgrid-yard') && !node.hasAttribute('data-landgrid-yard-label');
   });
   return text?.textContent?.trim() || '';
 }
@@ -48,31 +47,22 @@ function getLotNumber(group: SVGGElement) {
 export default function LandGridFilters({ projectSlug }: { projectSlug: string }) {
   const [owners, setOwners] = useState<Owner[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
-  const [selectedOwners, setSelectedOwners] = useState<Set<string>>(new Set());
+  const [selectedOwners, setSelectedOwners] = useState<Set<string>>(() => new Set());
+  const [selectedPlot, setSelectedPlot] = useState<Lot | null>(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [open, setOpen] = useState<OpenState>({ owner: true, status: false, plots: false, search: false });
-  const [selectedPlot, setSelectedPlot] = useState<Lot | null>(null);
-  const selectedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    selectedRef.current = selectedOwners;
-  }, [selectedOwners]);
-
-  useEffect(() => {
-    let alive = true;
+    let cancelled = false;
     fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`, { cache: 'no-store' })
       .then(response => {
         if (!response.ok) throw new Error(`Plan request failed: ${response.status}`);
         return response.json();
       })
       .then(data => {
-        if (!alive) return;
-        const rawOwners = Array.isArray(data?.owners)
-          ? data.owners
-          : Array.isArray(data?.project_owners)
-            ? data.project_owners
-            : [];
+        if (cancelled) return;
+        const rawOwners = Array.isArray(data?.owners) ? data.owners : Array.isArray(data?.project_owners) ? data.project_owners : [];
         const parsedOwners: Owner[] = rawOwners.map((owner: any) => ({
           id: String(owner.id),
           name: String(owner.name || 'Unnamed owner'),
@@ -87,317 +77,229 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
             number: String(lot.number ?? lot.plot_number ?? ''),
             ownerId,
             ownerName: String(lot.ownerName || lot.owner_name || (ownerId ? ownerNames.get(ownerId) : '') || ''),
-            status: normalize(lot.status || 'available'),
+            status: norm(lot.status || 'available'),
             area: lot.area != null ? Number(lot.area) : lot.area_sq_yards != null ? Number(lot.area_sq_yards) : null,
             price: lot.price ?? null,
             direction: String(lot.direction || ''),
           };
         });
-        parsedLots.sort((a, b) => Number(a.number) - Number(b.number));
         parsedOwners.sort((a, b) => a.name.localeCompare(b.name));
+        parsedLots.sort((a, b) => Number(a.number) - Number(b.number));
         setOwners(parsedOwners.filter(owner => parsedLots.some(lot => lot.ownerId === owner.id)));
         setLots(parsedLots);
       })
       .catch(error => {
         console.error('[LandGrid] Failed to load plan', error);
-        if (alive) {
+        if (!cancelled) {
           setOwners([]);
           setLots([]);
         }
       });
-    return () => { alive = false; };
+    return () => { cancelled = true; };
   }, [projectSlug]);
 
-  const ownerById = useMemo(() => new Map(owners.map(owner => [owner.id, owner])), [owners]);
+  const ownerMap = useMemo(() => new Map(owners.map(owner => [owner.id, owner])), [owners]);
   const ownerIndex = useMemo(() => new Map(owners.map((owner, index) => [owner.id, index])), [owners]);
 
   const filteredLots = useMemo(() => {
-    const query = normalize(search);
+    const query = norm(search);
     return lots.filter(lot => {
-      const ownerName = normalize(lot.ownerName || ownerById.get(String(lot.ownerId))?.name);
-      const queryMatch = !query || normalize(lot.number).includes(query) || ownerName.includes(query);
-      const statusMatch = status === 'all' || lot.status === status;
-      return queryMatch && statusMatch;
+      const ownerName = norm(lot.ownerName || ownerMap.get(String(lot.ownerId))?.name);
+      return (!query || norm(lot.number).includes(query) || ownerName.includes(query)) && (status === 'all' || lot.status === status);
     });
-  }, [lots, search, status, ownerById]);
+  }, [lots, search, status, ownerMap]);
 
-  const selectedOwnerLots = useMemo(
+  const selectedLots = useMemo(
     () => lots.filter(lot => lot.ownerId != null && selectedOwners.has(String(lot.ownerId))),
     [lots, selectedOwners],
   );
 
   const selectedYards = useMemo(
-    () => selectedOwnerLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0),
-    [selectedOwnerLots],
+    () => selectedLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0),
+    [selectedLots],
   );
 
-  // IMPORTANT: use a native pointerdown listener for owner rows.
-  // The browser is demonstrably delivering pointerdown events on this page;
-  // using the native event path avoids any React synthetic-event/hydration issue.
+  // Owner selection is deliberately handled by React's normal button click.
+  // There is no document-level listener, preventDefault, synthetic click, or DOM replacement.
+  const toggleOwner = (ownerId: string) => {
+    setSelectedOwners(previous => {
+      const next = new Set(previous);
+      if (next.has(ownerId)) next.delete(ownerId);
+      else next.add(ownerId);
+      console.info('[LandGrid] OWNER SELECT', { ownerId, selectedOwnerIds: Array.from(next) });
+      return next;
+    });
+  };
+
+  const clearOwners = () => setSelectedOwners(new Set());
+
+  // Apply owner colors directly to the existing SVG after React state changes.
+  // The effect never adds/removes SVG nodes, so it cannot fight React's DOM reconciler.
   useEffect(() => {
-    const panel = document.querySelector('.lg-left-panel');
-    if (!panel) return;
-
-    const onPointerDown = (event: Event) => {
-      const pointer = event as PointerEvent;
-      if (pointer.button !== 0) return;
-      const target = pointer.target;
-      if (!(target instanceof Element)) return;
-      const row = target.closest<HTMLButtonElement>('[data-landgrid-owner-id]');
-      if (!row || !panel.contains(row)) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-
-      const id = row.dataset.landgridOwnerId;
-      if (!id) return;
-      const next = new Set(selectedRef.current);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      selectedRef.current = next;
-      setSelectedOwners(new Set(next));
-
-      console.info('[LandGrid] OWNER SELECT', {
-        ownerId: id,
-        owner: row.dataset.landgridOwnerName || row.textContent?.trim(),
-        selectedOwnerIds: Array.from(next),
-      });
-    };
-
-    panel.addEventListener('pointerdown', onPointerDown, true);
-    return () => panel.removeEventListener('pointerdown', onPointerDown, true);
-  }, []);
-
-  // Keep the SVG highlighting entirely local to this component. It does not
-  // depend on PlotViewer React state and it supports several owners at once.
-  useEffect(() => {
+    let cancelled = false;
     let frame = 0;
 
-    const applyHighlight = () => {
-      const svg = findMapSvg();
+    const apply = () => {
+      if (cancelled) return;
+      const svg = getMapSvg();
       if (!svg) return;
 
       const selected = selectedOwners;
       svg.querySelectorAll<SVGGElement>('g').forEach(group => {
-        const number = getLotNumber(group);
+        const number = getPlotNumber(group);
         if (!number) return;
         const lot = lots.find(item => item.number === number);
         const polygon = group.querySelector<SVGPolygonElement>('polygon');
         if (!lot || !polygon) return;
 
-        const ownerId = lot.ownerId != null ? String(lot.ownerId) : '';
-        const owner = ownerId ? ownerById.get(ownerId) : undefined;
+        const ownerId = lot.ownerId == null ? '' : String(lot.ownerId);
+        const owner = ownerMap.get(ownerId);
         const active = ownerId !== '' && selected.has(ownerId);
 
         if (active) {
-          const color = owner ? ownerColor(owner, ownerIndex.get(owner.id) ?? 0) : '#2563eb';
+          const color = owner ? colorFor(owner, ownerIndex.get(owner.id) ?? 0) : '#2563eb';
           polygon.style.setProperty('fill', color, 'important');
-          polygon.style.setProperty('fill-opacity', '0.90', 'important');
+          polygon.style.setProperty('fill-opacity', '0.92', 'important');
           polygon.style.setProperty('stroke', '#ffffff', 'important');
           polygon.style.setProperty('stroke-width', '4', 'important');
           polygon.style.setProperty('filter', `drop-shadow(0 0 5px ${color})`, 'important');
-          group.setAttribute('data-landgrid-owner-selected', 'true');
         } else {
           polygon.style.removeProperty('fill');
+          polygon.style.removeProperty('fill-opacity');
           polygon.style.removeProperty('stroke');
           polygon.style.removeProperty('stroke-width');
           polygon.style.removeProperty('filter');
-          group.removeAttribute('data-landgrid-owner-selected');
         }
       });
     };
 
-    const schedule = () => {
+    const run = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(applyHighlight);
+      frame = requestAnimationFrame(apply);
     };
 
-    const canvas = document.querySelector('.pv-canvas');
-    if (canvas) {
-      const observer = new MutationObserver(schedule);
-      observer.observe(canvas, { childList: true, subtree: true });
-      schedule();
-      return () => {
-        cancelAnimationFrame(frame);
-        observer.disconnect();
-      };
-    }
+    // The map can finish rendering after the filter state changes. Retry for a short
+    // bounded period rather than installing a permanent DOM mutation observer.
+    let attempts = 0;
+    const retry = () => {
+      if (cancelled || attempts++ >= 12) return;
+      run();
+      window.setTimeout(retry, 100);
+    };
+    retry();
 
-    schedule();
-    return () => cancelAnimationFrame(frame);
-  }, [lots, selectedOwners, ownerById, ownerIndex]);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [lots, selectedOwners, ownerMap, ownerIndex]);
 
-  function focusLot(lot: Lot) {
+  const focusLot = (lot: Lot) => {
     setSelectedPlot(lot);
-    const svg = findMapSvg();
+    const svg = getMapSvg();
     if (!svg) return;
-    const group = Array.from(svg.querySelectorAll<SVGGElement>('g')).find(item => getLotNumber(item) === lot.number);
+    const group = Array.from(svg.querySelectorAll<SVGGElement>('g')).find(item => getPlotNumber(item) === lot.number);
     if (group) group.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  }
+  };
 
-  function clearOwners() {
-    selectedRef.current = new Set();
-    setSelectedOwners(new Set());
-  }
-
-  function toggleSection(id: keyof OpenState) {
-    setOpen(previous => ({ ...previous, [id]: !previous[id] }));
-  }
+  const toggleSection = (section: keyof OpenState) => setOpen(previous => ({ ...previous, [section]: !previous[section] }));
 
   return (
     <div className="lg-shell-overlay">
       <aside className="lg-left-panel" aria-label="Filters and find">
-        <div className="lg-title">
-          <strong>Filters &amp; Find</strong>
-          <span>Select what you want to see on the map.</span>
-        </div>
+        <div className="lg-title"><strong>Filters &amp; Find</strong><span>Select what you want to see on the map.</span></div>
 
         <section className="lg-section">
           <button type="button" className="lg-heading" onClick={() => toggleSection('owner')}>
             <span className="lg-heading-left">{open.owner ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Filter by Owner</b></span>
             {selectedOwners.size > 0 && <span className="lg-count">{selectedOwners.size}</span>}
           </button>
-          {open.owner && (
-            <div className="lg-body">
-              <div className="lg-owner-actions">
-                <span>{selectedOwners.size ? `${selectedOwnerLots.length} plots selected` : 'Select one or more owners'}</span>
-                {selectedOwners.size > 0 && <button type="button" onClick={clearOwners}>Clear</button>}
-              </div>
-
-              {owners.length === 0 ? (
-                <div className="lg-empty">No plot owners assigned.</div>
-              ) : owners.map((owner, index) => {
-                const active = selectedOwners.has(owner.id);
-                const color = ownerColor(owner, index);
-                return (
-                  <button
-                    key={owner.id}
-                    type="button"
-                    className={`lg-row lg-owner ${active ? 'active' : ''}`}
-                    data-landgrid-owner-id={owner.id}
-                    data-landgrid-owner-name={owner.name}
-                    aria-pressed={active}
-                  >
-                    <span className="lg-dot" style={{ background: color }} />
-                    <span>{owner.name}</span>
-                    <span className="lg-check" aria-hidden="true">{active ? <Check size={12} /> : null}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {open.owner && <div className="lg-body">
+            <div className="lg-owner-actions"><span>{selectedOwners.size ? `${selectedLots.length} plots selected` : 'Select one or more owners'}</span>{selectedOwners.size > 0 && <button type="button" onClick={clearOwners}>Clear</button>}</div>
+            {owners.map((owner, index) => {
+              const active = selectedOwners.has(owner.id);
+              const color = colorFor(owner, index);
+              return (
+                <button
+                  key={owner.id}
+                  type="button"
+                  className={`lg-row lg-owner ${active ? 'active' : ''}`}
+                  aria-pressed={active}
+                  onClick={() => toggleOwner(owner.id)}
+                >
+                  <span className="lg-dot" style={{ background: color }} />
+                  <span>{owner.name}</span>
+                  <span className="lg-check" aria-hidden="true">{active ? <Check size={12} /> : null}</span>
+                </button>
+              );
+            })}
+            {owners.length === 0 && <div className="lg-empty">No plot owners assigned.</div>}
+          </div>}
         </section>
 
         <section className="lg-section">
           <button type="button" className="lg-heading" onClick={() => toggleSection('status')}>
             <span className="lg-heading-left">{open.status ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Plot Status</b></span>
           </button>
-          {open.status && (
-            <div className="lg-body">
-              <div className="lg-status-grid">
-                {([['all', 'All'], ...Object.entries(STATUS).map(([key, value]) => [key, value.label])] as [string, string][]).map(([key, label]) => (
-                  <button key={key} type="button" className={`lg-status ${status === key ? 'active' : ''}`} onClick={() => setStatus(key)}>
-                    <span className="lg-dot" style={{ background: key === 'all' ? '#94a3b8' : STATUS[key].dot }} />
-                    <span>{label}</span>
-                    <em>{key === 'all' ? lots.length : lots.filter(lot => lot.status === key).length}</em>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {open.status && <div className="lg-body"><div className="lg-status-grid">
+            {[['all', 'All'], ...Object.entries(STATUS).map(([key, value]) => [key, value.label])].map(([key, label]) => (
+              <button key={key} type="button" className={`lg-status ${status === key ? 'active' : ''}`} onClick={() => setStatus(key)}>
+                <span className="lg-dot" style={{ background: key === 'all' ? '#94a3b8' : STATUS[key].dot }} /><span>{label}</span><em>{key === 'all' ? lots.length : lots.filter(lot => lot.status === key).length}</em>
+              </button>
+            ))}
+          </div></div>}
         </section>
 
         <section className="lg-section">
           <button type="button" className="lg-heading" onClick={() => toggleSection('plots')}>
-            <span className="lg-heading-left">{open.plots ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Plots</b></span>
-            <span className="lg-count">{filteredLots.length}</span>
+            <span className="lg-heading-left">{open.plots ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Plots</b></span><span className="lg-count">{filteredLots.length}</span>
           </button>
-          {open.plots && (
-            <div className="lg-body">
-              <div className="lg-plot-list">
-                {filteredLots.map(lot => (
-                  <button key={lot.id} type="button" className={`lg-row lg-plot ${selectedPlot?.id === lot.id ? 'active' : ''}`} onClick={() => focusLot(lot)}>
-                    <span className="lg-dot" style={{ background: STATUS[lot.status]?.dot || '#64748b' }} />
-                    <span>
-                      <b>Plot {lot.number}</b>
-                      <small>{lot.ownerName || ownerById.get(String(lot.ownerId))?.name || 'No owner'}{lot.area != null ? ` · ${lot.area.toLocaleString()} sq.yd` : ''}</small>
-                    </span>
-                  </button>
-                ))}
-                {filteredLots.length === 0 && <div className="lg-empty">No plots match the current filters.</div>}
-              </div>
-            </div>
-          )}
+          {open.plots && <div className="lg-body"><div className="lg-plot-list">
+            {filteredLots.map(lot => <button key={lot.id} type="button" className={`lg-row lg-plot ${selectedPlot?.id === lot.id ? 'active' : ''}`} onClick={() => focusLot(lot)}>
+              <span className="lg-dot" style={{ background: STATUS[lot.status]?.dot || '#64748b' }} /><span><b>Plot {lot.number}</b><small>{lot.ownerName || ownerMap.get(String(lot.ownerId))?.name || 'No owner'}{lot.area != null ? ` · ${lot.area.toLocaleString()} sq.yd` : ''}</small></span>
+            </button>)}
+            {filteredLots.length === 0 && <div className="lg-empty">No plots match the current filters.</div>}
+          </div></div>}
         </section>
 
         <section className="lg-section">
           <button type="button" className="lg-heading" onClick={() => toggleSection('search')}>
-            <span className="lg-heading-left">{open.search ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Free Search</b></span>
-            {search && <span className="lg-count">1</span>}
+            <span className="lg-heading-left">{open.search ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Free Search</b></span>{search && <span className="lg-count">1</span>}
           </button>
-          {open.search && (
-            <div className="lg-body">
-              <div className="lg-search-wrap">
-                <Search size={14} />
-                <input value={search} onChange={event => setSearch(event.target.value)} placeholder="Plot number or owner name" aria-label="Search plot or owner" />
-                {search && <button type="button" onClick={() => setSearch('')}><X size={13} /></button>}
-              </div>
-            </div>
-          )}
+          {open.search && <div className="lg-body"><div className="lg-search-wrap"><Search size={14} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Plot number or owner name" aria-label="Search plot or owner" />{search && <button type="button" onClick={() => setSearch('')}><X size={13} /></button>}</div></div>}
         </section>
       </aside>
 
       <aside className="lg-right-panel" aria-label="Property information">
         <div className="lg-title">
           <strong>{selectedOwners.size ? 'Owner Plot Summary' : selectedPlot ? `Plot ${selectedPlot.number}` : 'Property Information'}</strong>
-          <span>
-            {selectedOwners.size
-              ? `${selectedOwnerLots.length} plots · ${selectedYards.toLocaleString(undefined, { maximumFractionDigits: 2 })} sq.yd`
-              : selectedPlot
-                ? 'Selected property'
-                : 'Select an owner or plot to view details.'}
-          </span>
+          <span>{selectedOwners.size ? `${selectedLots.length} plots · ${selectedYards.toLocaleString(undefined, { maximumFractionDigits: 2 })} sq.yd` : selectedPlot ? 'Selected property' : 'Select an owner or plot to view details.'}</span>
         </div>
-
-        {selectedOwners.size > 0 ? (
-          <div className="lg-summary-list">
-            {owners.filter(owner => selectedOwners.has(owner.id)).map(owner => {
-              const ownerLots = lots.filter(lot => lot.ownerId === owner.id);
-              const yards = ownerLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0);
-              const index = ownerIndex.get(owner.id) ?? 0;
-              return (
-                <div className="lg-owner-card" key={owner.id}>
-                  <div className="lg-owner-card-title"><span className="lg-dot" style={{ background: ownerColor(owner, index) }} />{owner.name}</div>
-                  <div className="lg-owner-total">{ownerLots.length} plots</div>
-                  <div className="lg-owner-plots">
-                    {ownerLots.map(lot => (
-                      <button key={lot.id} type="button" onClick={() => focusLot(lot)}>
-                        Plot {lot.number}<span>{lot.area != null ? `${lot.area.toLocaleString()} yd²` : '—'}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="lg-owner-yards">{yards.toLocaleString(undefined, { maximumFractionDigits: 2 })} sq.yd total</div>
-                </div>
-              );
-            })}
-          </div>
-        ) : selectedPlot ? (
-          <div className="lg-detail">
-            <div className="lg-detail-stat"><small>Status</small><b>{STATUS[selectedPlot.status]?.label || selectedPlot.status}</b></div>
-            <div className="lg-detail-stat"><small>Owner</small><b>{selectedPlot.ownerName || ownerById.get(String(selectedPlot.ownerId))?.name || 'Unassigned'}</b></div>
-            {selectedPlot.area != null && <div className="lg-detail-stat"><small>Area</small><b>{selectedPlot.area.toLocaleString()} sq.yd</b></div>}
-            {selectedPlot.price != null && <div className="lg-detail-stat"><small>Price</small><b>{String(selectedPlot.price)}</b></div>}
-            {selectedPlot.direction && <div className="lg-detail-stat"><small>Direction</small><b>{selectedPlot.direction}</b></div>}
-          </div>
-        ) : (
-          <div className="lg-empty lg-empty-large">Use <b>Filter by Owner</b> to select one or more owners and highlight their plots on the map.</div>
-        )}
+        {selectedOwners.size > 0 ? <div className="lg-summary-list">
+          {owners.filter(owner => selectedOwners.has(owner.id)).map(owner => {
+            const ownerLots = lots.filter(lot => lot.ownerId === owner.id);
+            const yards = ownerLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0);
+            const index = ownerIndex.get(owner.id) ?? 0;
+            return <div className="lg-owner-card" key={owner.id}>
+              <div className="lg-owner-card-title"><span className="lg-dot" style={{ background: colorFor(owner, index) }} />{owner.name}</div>
+              <div className="lg-owner-total">{ownerLots.length} plots</div>
+              <div className="lg-owner-plots">{ownerLots.map(lot => <button key={lot.id} type="button" onClick={() => focusLot(lot)}>Plot {lot.number}<span>{lot.area != null ? `${lot.area.toLocaleString()} yd²` : '—'}</span></button>)}</div>
+              <div className="lg-owner-yards">{yards.toLocaleString(undefined, { maximumFractionDigits: 2 })} sq.yd total</div>
+            </div>;
+          })}
+        </div> : selectedPlot ? <div className="lg-detail">
+          <div className="lg-detail-stat"><small>Status</small><b>{STATUS[selectedPlot.status]?.label || selectedPlot.status}</b></div>
+          <div className="lg-detail-stat"><small>Owner</small><b>{selectedPlot.ownerName || ownerMap.get(String(selectedPlot.ownerId))?.name || 'Unassigned'}</b></div>
+          {selectedPlot.area != null && <div className="lg-detail-stat"><small>Area</small><b>{selectedPlot.area.toLocaleString()} sq.yd</b></div>}
+          {selectedPlot.price != null && <div className="lg-detail-stat"><small>Price</small><b>{String(selectedPlot.price)}</b></div>}
+          {selectedPlot.direction && <div className="lg-detail-stat"><small>Direction</small><b>{selectedPlot.direction}</b></div>}
+        </div> : <div className="lg-empty lg-empty-large">Use <b>Filter by Owner</b> to select one or more owners and highlight their plots on the map.</div>}
       </aside>
 
       <style>{`
         .lg-shell-overlay{position:absolute;inset:0;z-index:1000;pointer-events:none}
         .lg-left-panel,.lg-right-panel{position:absolute;top:0;bottom:0;pointer-events:auto;background:#fff;border:1px solid #dbe3ee;box-shadow:0 8px 28px rgba(15,23,42,.16);overflow:auto;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#172033}
-        .lg-left-panel{left:0;width:280px}.lg-right-panel{right:0;width:320px}
-        .lg-left-panel *,.lg-right-panel *{box-sizing:border-box}
+        .lg-left-panel{left:0;width:280px}.lg-right-panel{right:0;width:320px}.lg-left-panel *,.lg-right-panel *{box-sizing:border-box}
         .lg-title{padding:14px 15px;border-bottom:1px solid #e2e8f0}.lg-title strong{display:block;font-size:14px;font-weight:900}.lg-title span{display:block;margin-top:3px;font-size:10px;color:#64748b;line-height:1.45}
         .lg-section{border-bottom:1px solid #e2e8f0}.lg-heading{width:100%;padding:12px 14px;border:0;background:#fff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#172033;text-align:left}.lg-heading-left{display:flex;align-items:center;gap:5px}.lg-count{min-width:20px;padding:2px 6px;border-radius:99px;background:#172554;color:#fff;text-align:center;font-size:10px;font-weight:800}
         .lg-body{padding:0 10px 10px}.lg-owner-actions{display:flex;justify-content:space-between;align-items:center;padding:2px 3px 4px;color:#64748b;font-size:10px}.lg-owner-actions button{border:0;background:none;color:#334155;font-size:10px;font-weight:800;cursor:pointer}
@@ -407,7 +309,7 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
         .lg-search-wrap{position:relative;display:flex;align-items:center}.lg-search-wrap>svg{position:absolute;left:9px;color:#94a3b8}.lg-search-wrap input{width:100%;border:1px solid #dbe2ea;border-radius:8px;padding:9px 30px;font-size:12px;outline:none}.lg-search-wrap button{position:absolute;right:4px;border:0;background:none;cursor:pointer;color:#64748b}
         .lg-summary-list{padding:2px 0 12px}.lg-owner-card{margin:10px 12px;border:1px solid #dbe3ee;border-radius:10px;padding:11px}.lg-owner-card-title{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:900}.lg-owner-total{margin-top:7px;font-size:19px;font-weight:900}.lg-owner-plots{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:7px;max-height:260px;overflow:auto}.lg-owner-plots button{border:1px solid #edf1f6;background:#f8fafc;border-radius:6px;padding:5px 6px;text-align:left;font-size:10px;cursor:pointer}.lg-owner-plots span{display:block;color:#64748b;margin-top:2px}.lg-owner-yards{margin-top:8px;padding-top:8px;border-top:1px solid #eef2f7;font-size:12px;font-weight:900;text-align:right}
         .lg-detail{padding:12px}.lg-detail-stat{padding:11px 12px;margin-bottom:8px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc}.lg-detail-stat small{display:block;color:#64748b;font-size:9px;font-weight:800;text-transform:uppercase}.lg-detail-stat b{display:block;margin-top:3px;font-size:14px}
-        @media(max-width:767px){.lg-shell-overlay{position:fixed;inset:0;z-index:1000;pointer-events:none}.lg-left-panel{width:min(88vw,320px);top:64px;bottom:58px;border-radius:0 14px 0 0}.lg-right-panel{display:none}.lg-left-panel{box-shadow:6px 0 24px rgba(15,23,42,.18)}}
+        @media(max-width:767px){.lg-shell-overlay{position:fixed;inset:0;z-index:1000;pointer-events:none}.lg-left-panel{width:min(88vw,320px);top:64px;bottom:58px;border-radius:0 14px 0 0}.lg-right-panel{display:none}}
       `}</style>
     </div>
   );
