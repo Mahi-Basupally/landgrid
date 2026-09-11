@@ -4,13 +4,16 @@ import { useEffect } from 'react';
 
 type LotMeta = { number: string; owner: string; color: string };
 
-/** Keeps the external LandGrid filter panel and the SVG map in sync.
- * The viewer owns the SVG; this component only applies presentation state,
- * so zoom/pan/plot selection remain untouched.
- */
+/** Keeps the external LandGrid filter panel and the SVG map in sync. */
 export default function LandGridFilterSync() {
   useEffect(() => {
     const root = document.body;
+    const statusColors: Record<string, string> = {
+      available: 'rgb(22, 163, 74)',
+      reserved: 'rgb(202, 138, 4)',
+      sold: 'rgb(220, 38, 38)',
+      hold: 'rgb(100, 116, 139)',
+    };
 
     const readState = () => {
       const panel = document.querySelector('.lg-filter-panel');
@@ -26,20 +29,18 @@ export default function LandGridFilterSync() {
 
       const statusButton = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-status-row'))
         .find(b => getComputedStyle(b).backgroundColor === 'rgb(23, 37, 84)');
-      const status = statusButton?.textContent?.trim().split(/\\s+/)[0]?.toLowerCase() || 'all';
+      const status = statusButton?.textContent?.trim().split(/\s+/)[0]?.toLowerCase() || 'all';
 
       const input = panel.querySelector<HTMLInputElement>('.lg-search');
       const query = (input?.value || '').trim().toLowerCase();
 
       const plotMeta = new Map<string, LotMeta>();
       panel.querySelectorAll<HTMLButtonElement>('.lg-plot-row').forEach(row => {
-        const number = (row.querySelector('div > div')?.textContent || '').replace(/^Plot\\s+/i, '').trim();
+        const number = (row.querySelector('div > div')?.textContent || '').replace(/^Plot\s+/i, '').trim();
         const meta = (row.querySelector('.meta')?.textContent || '').trim();
         const owner = meta.split(' · ')[0].toLowerCase();
-        if (number) {
-          const dot = row.querySelector('span') as Element | null;
-          plotMeta.set(number, { number, owner, color: dot ? getComputedStyle(dot).backgroundColor : '#2563eb' });
-        }
+        const dot = row.querySelector('span') as Element | null;
+        if (number) plotMeta.set(number, { number, owner, color: dot ? getComputedStyle(dot).backgroundColor : '' });
       });
 
       const svg = Array.from(document.querySelectorAll<SVGSVGElement>('.pv-canvas svg')).find(s => s.querySelector('polygon'));
@@ -55,10 +56,7 @@ export default function LandGridFilterSync() {
         const meta = plotMeta.get(label);
         const ownerMatch = selectedOwners.find(o => meta?.owner === o.name);
         const searchMatch = !query || label.toLowerCase().includes(query) || (meta?.owner || '').includes(query);
-        const statusMatch = status === 'all' || (meta &&
-          (Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-status-row'))
-            .find(b => b.textContent?.trim().toLowerCase().startsWith(status)) ?
-            true : true));
+        const statusMatch = status === 'all' || statusColors[status] === meta?.color;
         const filteredOut = Boolean(query || status !== 'all') && (!searchMatch || !statusMatch);
 
         poly.style.setProperty('fill', ownerMatch?.color || '');
