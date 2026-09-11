@@ -44,10 +44,6 @@ export default function LandGridFilterDebug() {
         const oldTimer = pendingOwnerClicks.get(ownerRow);
         if (oldTimer) window.clearTimeout(oldTimer);
 
-        // The map/filter UI occasionally receives pointerdown without the
-        // browser producing the React click event. Give the normal click a
-        // short chance to arrive first, then invoke the row's existing click
-        // handler as a fallback. This avoids double-toggling when click works.
         const timer = window.setTimeout(() => {
           pendingOwnerClicks.delete(ownerRow);
           if (ownerClickSeen.has(ownerRow)) return;
@@ -111,7 +107,6 @@ export default function LandGridFilterDebug() {
       root.removeEventListener('pointerdown', pointerDown, true);
       root.removeEventListener('click', clickCapture, true);
       root.removeEventListener('click', clickBubble, false);
-      pendingOwnerClicks.forEach?.(() => {});
     };
   }, []);
 
