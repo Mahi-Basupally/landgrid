@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useHeader } from '@/lib/header-context';
 import LandGridFilters from './landgrid-filters';
+import LandGridFilterDebug from './landgrid-filter-debug';
 
 const PlotViewer = dynamic(() => import('./plot-viewer'), {
   ssr: false,
@@ -21,6 +22,7 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
     <div className="lg-viewer-shell">
       <PlotViewer projectSlug={projectSlug} />
       <LandGridFilters projectSlug={projectSlug} />
+      <LandGridFilterDebug />
       <style jsx global>{`
         .lg-viewer-shell {
           position: relative;
