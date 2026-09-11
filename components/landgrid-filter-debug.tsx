@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 
+/** Lightweight click diagnostics only. It must never synthesize a second click. */
 export default function LandGridFilterDebug() {
   const attempts = useRef<Record<string, number>>({});
   const last = useRef<Record<string, number>>({});
@@ -12,9 +13,6 @@ export default function LandGridFilterDebug() {
       console.warn('[LandGrid Debug] .lg-left-panel not found');
       return;
     }
-
-    const pendingOwnerClicks = new WeakMap<Element, number>();
-    const ownerClickSeen = new WeakSet<Element>();
 
     const labelFor = (el: Element) => {
       const owner = el.closest('.lg-owner')?.textContent?.trim();
@@ -38,27 +36,6 @@ export default function LandGridFilterDebug() {
       const delta = last.current[label] == null ? null : Math.round(now - last.current[label]);
       last.current[label] = now;
 
-      // Owner rows are rendered by landgrid-filters.tsx as .lg-owner.
-      // Keep the fallback aligned with the real DOM class so it can recover
-      // from browsers/components that suppress the React click handler.
-      const ownerRow = target.closest('.lg-owner') as HTMLButtonElement | null;
-      if (ownerRow && pointerEvent.button === 0) {
-        ownerClickSeen.delete(ownerRow);
-        const oldTimer = pendingOwnerClicks.get(ownerRow);
-        if (oldTimer) window.clearTimeout(oldTimer);
-
-        const timer = window.setTimeout(() => {
-          pendingOwnerClicks.delete(ownerRow);
-          if (ownerClickSeen.has(ownerRow)) return;
-          ownerRow.click();
-          console.info('[LandGrid Debug] OWNER CLICK FALLBACK', {
-            label,
-            owner: ownerRow.textContent?.trim(),
-          });
-        }, 80);
-        pendingOwnerClicks.set(ownerRow, timer);
-      }
-
       console.info('[LandGrid Debug] POINTERDOWN', {
         label,
         attempt: attempts.current[label],
@@ -74,13 +51,6 @@ export default function LandGridFilterDebug() {
       const mouseEvent = event as MouseEvent;
       const target = mouseEvent.target;
       if (!(target instanceof Element)) return;
-      const ownerRow = target.closest('.lg-owner');
-      if (ownerRow) {
-        ownerClickSeen.add(ownerRow);
-        const timer = pendingOwnerClicks.get(ownerRow);
-        if (timer) window.clearTimeout(timer);
-        pendingOwnerClicks.delete(ownerRow);
-      }
       const label = labelFor(target);
       console.info('[LandGrid Debug] CLICK CAPTURE', {
         label,
