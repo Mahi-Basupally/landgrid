@@ -25,8 +25,9 @@ export default function LandGridFilterDebug() {
       return el.tagName;
     };
 
-    const pointerDown = (event: PointerEvent) => {
-      const target = event.target;
+    const pointerDown = (event: Event) => {
+      const pointerEvent = event as PointerEvent;
+      const target = pointerEvent.target;
       if (!(target instanceof Element)) return;
       const label = labelFor(target);
       attempts.current[label] = (attempts.current[label] || 0) + 1;
@@ -36,32 +37,34 @@ export default function LandGridFilterDebug() {
       console.info('[LandGrid Debug] POINTERDOWN', {
         label,
         attempt: attempts.current[label],
-        pointerType: event.pointerType,
-        button: event.button,
+        pointerType: pointerEvent.pointerType,
+        button: pointerEvent.button,
         deltaMs: delta,
-        defaultPrevented: event.defaultPrevented,
+        defaultPrevented: pointerEvent.defaultPrevented,
         target: target.outerHTML.slice(0, 180),
       });
     };
 
-    const clickCapture = (event: MouseEvent) => {
-      const target = event.target;
+    const clickCapture = (event: Event) => {
+      const mouseEvent = event as MouseEvent;
+      const target = mouseEvent.target;
       if (!(target instanceof Element)) return;
       const label = labelFor(target);
       console.info('[LandGrid Debug] CLICK CAPTURE', {
         label,
-        defaultPrevented: event.defaultPrevented,
+        defaultPrevented: mouseEvent.defaultPrevented,
         target: target.outerHTML.slice(0, 180),
       });
     };
 
-    const clickBubble = (event: MouseEvent) => {
-      const target = event.target;
+    const clickBubble = (event: Event) => {
+      const mouseEvent = event as MouseEvent;
+      const target = mouseEvent.target;
       if (!(target instanceof Element)) return;
       const label = labelFor(target);
       console.info('[LandGrid Debug] CLICK BUBBLE', {
         label,
-        defaultPrevented: event.defaultPrevented,
+        defaultPrevented: mouseEvent.defaultPrevented,
       });
     };
 
