@@ -14,16 +14,17 @@ function NativeOwnerMapBridge({projectSlug}:{projectSlug:string}){
     const load=async()=>{try{const r=await fetch(`/api/projects/${encodeURIComponent(projectSlug)}/plan`,{cache:'no-store'});const d=await r.json();if(!disposed){lots=(d.lots||[]).map((l:any)=>({number:String(l.number??''),ownerId:l.ownerId==null?null:String(l.ownerId)}));owners=(d.owners||[]).map((o:any)=>({id:String(o.id),name:String(o.name||'')}));}}catch{}};
     void load();
     const ownerName=(id:string|null)=>owners.find(o=>o.id===id)?.name.toLowerCase()||'';
+    const rowColor=(row:Element)=>getComputedStyle(row.querySelector('.lg-owner-dot,.lg-dot')||row).backgroundColor;
     const apply=()=>{
       const panel=document.querySelector('.lg-left-panel');
       const svg=Array.from(document.querySelectorAll<SVGSVGElement>('.pv-canvas svg')).find(s=>s.querySelector('polygon'));
       if(!panel||!svg||!lots.length)return;
       const active=new Map<string,string>();
-      panel.querySelectorAll<HTMLButtonElement>('.lg-owner.active').forEach(row=>{const name=(row.querySelector('.lg-owner-name')?.textContent||row.textContent||'').trim().toLowerCase();const color=getComputedStyle(row.querySelector('.lg-owner-dot')||row).backgroundColor;if(name)active.set(name,color);});
+      panel.querySelectorAll<HTMLButtonElement>('.lg-owner.active').forEach(row=>{const name=(row.querySelector('.lg-owner-name')?.textContent||row.textContent||'').replace('✓','').trim().toLowerCase();if(name)active.set(name,rowColor(row));});
       svg.querySelectorAll<SVGGElement>('g').forEach(group=>{
         const label=Array.from(group.querySelectorAll('text')).find(t=>!t.hasAttribute('data-landgrid-yard'))?.textContent?.trim();
         const poly=group.querySelector<SVGPolygonElement>('polygon'); if(!label||!poly)return;
-        const lot=lots.find(l=>l.number===label); const name=ownerName(lot?.ownerId||null); const color=active.get(name);
+        const lot=lots.find(l=>l.number===label); const color=active.get(ownerName(lot?.ownerId||null));
         if(color){poly.style.setProperty('fill',color,'important');poly.style.setProperty('fill-opacity','.9','important');poly.style.setProperty('stroke','#fff','important');poly.style.setProperty('stroke-width','5','important');poly.style.setProperty('filter',`drop-shadow(0 0 6px ${color})`,'important');}
         else{poly.style.removeProperty('fill');poly.style.removeProperty('stroke');poly.style.removeProperty('stroke-width');poly.style.removeProperty('filter');}
       });
