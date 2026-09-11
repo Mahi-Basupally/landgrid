@@ -3,7 +3,6 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useHeader } from '@/lib/header-context';
 import LandGridFilters from './landgrid-filters';
-import LandGridFilterSync from './landgrid-filter-sync';
 
 const PlotViewer = dynamic(() => import('./plot-viewer'), {
   ssr: false,
@@ -19,12 +18,10 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
   useEffect(() => { setState({ projectName, isLoggedIn }); }, [projectName, isLoggedIn, setState]);
 
   return (
-    <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <div style={{ height: '100%', minHeight: 0, position: 'relative', overflow: 'hidden' }}>
       <PlotViewer projectSlug={projectSlug} />
       <LandGridFilters projectSlug={projectSlug} />
-      <LandGridFilterSync />
       <style jsx global>{`
-        /* Keep the application header as the top hit-test layer. */
         .app-header,
         .app-header * {
           position: relative;
@@ -32,58 +29,20 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
           pointer-events: auto !important;
         }
 
+        /* The viewer's original sidebars are replaced by LandGrid's
+           dedicated filter/information panels. */
         .pv { grid-template-columns: 1fr !important; }
         .pv-left, .pv-right { display: none !important; }
         .pv-canvas { min-width: 0; z-index: 0 !important; }
         .pv-canvas > svg { z-index: 0 !important; }
-
-        /* The filters are portaled to document.body. Give them their own
-           hit-test layer so map pointer/drag handlers cannot interfere. */
-        .lg-filter-panel,
-        .lg-info-panel {
-          position: fixed !important;
-          z-index: 2147483647 !important;
-          pointer-events: auto !important;
-          isolation: isolate !important;
-          user-select: auto !important;
-          touch-action: manipulation !important;
-        }
-
-        .lg-filter-panel button,
-        .lg-filter-panel input,
-        .lg-info-panel button,
-        .lg-info-panel input {
-          position: relative !important;
-          z-index: 1 !important;
-          pointer-events: auto !important;
-          touch-action: manipulation !important;
-          cursor: pointer;
-        }
-
-        .lg-filter-panel input {
-          cursor: text;
-          touch-action: auto !important;
-        }
-
-        /* Never allow the map's pointer capture/drag surface to sit above
-           the fixed filter layer. */
         .pv-canvas,
-        .pv-canvas * {
-          z-index: 0;
-        }
+        .pv-canvas * { z-index: 0; }
 
         @media (max-width: 767px) {
-          .lg-filter-panel {
-            top: auto !important;
+          .lg-left-panel {
+            top: 64px !important;
             bottom: 58px !important;
-            height: auto !important;
-            max-height: 70vh;
-            width: min(86vw, 320px) !important;
-            border-right: 0;
-            border-radius: 0 14px 0 0;
-            box-shadow: 0 -4px 18px rgba(15,23,42,.12);
           }
-          .lg-info-panel { display: none !important; }
         }
       `}</style>
     </div>
