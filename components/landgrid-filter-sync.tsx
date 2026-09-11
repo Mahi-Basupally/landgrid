@@ -19,10 +19,13 @@ export default function LandGridFilterSync() {
 
       const selectedOwners = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-owner-row'))
         .filter(b => b.classList.contains('active'))
-        .map(b => ({
-          name: (b.querySelector('span:nth-child(2)')?.textContent || '').trim().toLowerCase(),
-          color: getComputedStyle(b.querySelector('.lg-owner-dot') as Element | null).backgroundColor || '#2563eb',
-        }));
+        .map(b => {
+          const dot = b.querySelector('.lg-owner-dot');
+          return {
+            name: (b.querySelector('span:nth-child(2)')?.textContent || '').trim().toLowerCase(),
+            color: dot ? getComputedStyle(dot).backgroundColor : '#2563eb',
+          };
+        });
       const statusButton = Array.from(panel.querySelectorAll<HTMLButtonElement>('.lg-status-row'))
         .find(b => getComputedStyle(b).backgroundColor === 'rgb(23, 37, 84)');
       const status = statusButton?.textContent?.trim().split(/\s+/)[0]?.toLowerCase() || 'all';
@@ -32,7 +35,7 @@ export default function LandGridFilterSync() {
       panel.querySelectorAll<HTMLButtonElement>('.lg-plot-row').forEach(row => {
         const number = (row.querySelector('div > div')?.textContent || '').replace(/^Plot\s+/i, '').trim();
         const meta = (row.querySelector('.meta')?.textContent || '').trim();
-        const dot = row.querySelector('span') as Element | null;
+        const dot = row.querySelector('span');
         if (number) plotMeta.set(number, { number, owner: meta.split(' · ')[0].toLowerCase(), color: dot ? getComputedStyle(dot).backgroundColor : '' });
       });
 
@@ -58,7 +61,6 @@ export default function LandGridFilterSync() {
 
     let frame = 0;
     const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(readState); };
-    // Do not observe style attributes: this component changes polygon styles itself.
     const observer = new MutationObserver(schedule);
     observer.observe(root, { childList: true, subtree: true });
     root.addEventListener('input', schedule, true);
