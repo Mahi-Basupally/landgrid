@@ -37,10 +37,39 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
         .pv-canvas { min-width: 0; z-index: 0 !important; }
         .pv-canvas > svg { z-index: 0 !important; }
 
-        /* Filters are rendered through a document.body portal. */
+        /* The filters are portaled to document.body. Give them their own
+           hit-test layer so map pointer/drag handlers cannot interfere. */
         .lg-filter-panel,
         .lg-info-panel {
+          position: fixed !important;
+          z-index: 2147483647 !important;
           pointer-events: auto !important;
+          isolation: isolate !important;
+          user-select: auto !important;
+          touch-action: manipulation !important;
+        }
+
+        .lg-filter-panel button,
+        .lg-filter-panel input,
+        .lg-info-panel button,
+        .lg-info-panel input {
+          position: relative !important;
+          z-index: 1 !important;
+          pointer-events: auto !important;
+          touch-action: manipulation !important;
+          cursor: pointer;
+        }
+
+        .lg-filter-panel input {
+          cursor: text;
+          touch-action: auto !important;
+        }
+
+        /* Never allow the map's pointer capture/drag surface to sit above
+           the fixed filter layer. */
+        .pv-canvas,
+        .pv-canvas * {
+          z-index: 0;
         }
 
         @media (max-width: 767px) {
