@@ -3,6 +3,7 @@ import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useHeader } from '@/lib/header-context';
 import LandGridFilters from './landgrid-filters';
+import LandGridFilterSync from './landgrid-filter-sync';
 
 const PlotViewer = dynamic(() => import('./plot-viewer'), {
   ssr: false,
@@ -16,10 +17,12 @@ const PlotViewer = dynamic(() => import('./plot-viewer'), {
 export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn = false }: { projectSlug: string; projectName: string; isLoggedIn?: boolean }) {
   const { setState } = useHeader();
   useEffect(() => { setState({ projectName, isLoggedIn }); }, [projectName, isLoggedIn, setState]);
+
   return (
     <div style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', position: 'relative' }}>
       <PlotViewer projectSlug={projectSlug} />
       <LandGridFilters projectSlug={projectSlug} />
+      <LandGridFilterSync />
       <style jsx global>{`
         /* Keep the application header as the top hit-test layer. */
         .app-header,
@@ -32,11 +35,7 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
         .pv { grid-template-columns: 1fr !important; }
         .pv-left, .pv-right { display: none !important; }
         .pv-canvas { min-width: 0; z-index: 0 !important; }
-
-        /* The map SVG must stay below the fixed navigation and application header. */
-        .pv-canvas > svg {
-          z-index: 0 !important;
-        }
+        .pv-canvas > svg { z-index: 0 !important; }
 
         /* Filters are rendered through a document.body portal. */
         .lg-filter-panel,
