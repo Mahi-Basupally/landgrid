@@ -13,6 +13,9 @@ export default function LandGridFilterDebug() {
       return;
     }
 
+    const pendingOwnerClicks = new WeakMap<Element, number>();
+    const ownerClickSeen = new WeakSet<Element>();
+
     const labelFor = (el: Element) => {
       const owner = el.closest('.lg-owner')?.textContent?.trim();
       if (owner) return `Owner: ${owner}`;
@@ -35,18 +38,26 @@ export default function LandGridFilterDebug() {
       const delta = last.current[label] == null ? null : Math.round(now - last.current[label]);
       last.current[label] = now;
 
-      const ownerRow = target.closest('.lg-owner-row') as HTMLButtonElement | null;
+      const ownerRow = target.closest('.lg-owner-row') as HTMLElement | null;
       if (ownerRow && pointerEvent.button === 0) {
-        // Some browsers/platform combinations can deliver pointerdown to the
-        // row but fail to synthesize the React onClick. Trigger the row action
-        // immediately and suppress the follow-up native click so it toggles once.
-        pointerEvent.preventDefault();
-        ownerRow.click();
-        console.info('[LandGrid Debug] OWNER TOGGLE', {
-          label,
-          owner: ownerRow.textContent?.trim(),
-          activeAfter: ownerRow.classList.contains('active'),
-        });
+        ownerClickSeen.delete(ownerRow);
+        const oldTimer = pendingOwnerClicks.get(ownerRow);
+        if (oldTimer) window.clearTimeout(oldTimer);
+
+        // The map/filter UI occasionally receives pointerdown without the
+        // browser producing the React click event. Give the normal click a
+        // short chance to arrive first, then invoke the row's existing click
+        // handler as a fallback. This avoids double-toggling when click works.
+        const timer = window.setTimeout(() => {
+          pendingOwnerClicks.delete(ownerRow);
+          if (ownerClickSeen.has(ownerRow)) return;
+          ownerRow.click();
+          console.info('[LandGrid Debug] OWNER CLICK FALLBACK', {
+            label,
+            owner: ownerRow.textContent?.trim(),
+          });
+        }, 80);
+        pendingOwnerClicks.set(ownerRow, timer);
       }
 
       console.info('[LandGrid Debug] POINTERDOWN', {
@@ -64,6 +75,13 @@ export default function LandGridFilterDebug() {
       const mouseEvent = event as MouseEvent;
       const target = mouseEvent.target;
       if (!(target instanceof Element)) return;
+      const ownerRow = target.closest('.lg-owner-row');
+      if (ownerRow) {
+        ownerClickSeen.add(ownerRow);
+        const timer = pendingOwnerClicks.get(ownerRow);
+        if (timer) window.clearTimeout(timer);
+        pendingOwnerClicks.delete(ownerRow);
+      }
       const label = labelFor(target);
       console.info('[LandGrid Debug] CLICK CAPTURE', {
         label,
@@ -93,6 +111,7 @@ export default function LandGridFilterDebug() {
       root.removeEventListener('pointerdown', pointerDown, true);
       root.removeEventListener('click', clickCapture, true);
       root.removeEventListener('click', clickBubble, false);
+      pendingOwnerClicks.forEach?.(() => {});
     };
   }, []);
 
