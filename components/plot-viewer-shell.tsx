@@ -66,7 +66,12 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
         const status = lot.status === 'sale' ? 'sold' : lot.status;
         if (numberNode) numberNode.style.setProperty('fill', status === 'sold' ? '#dc2626' : '#172033', 'important');
         group.querySelectorAll<SVGCircleElement>('circle').forEach(circle => {
-          circle.style.setProperty('display', status === 'sold' ? 'none' : '');
+          if (status === 'sold') {
+            circle.style.setProperty('display', '', 'important');
+            circle.setAttribute('r', '14');
+          } else {
+            circle.style.removeProperty('display');
+          }
         });
         const polygon = group.querySelector<SVGPolygonElement>('polygon');
         if (polygon) {
@@ -114,6 +119,7 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
           .lg-left-panel.mobile-open{height:auto!important;max-height:min(72dvh,560px)!important;overflow:auto!important}
           .lg-right-panel{display:none!important}
           .lg-viewer-shell .pv-right{display:none!important}
+          .lg-viewer-shell:has(.pv-sheet.open) .lg-shell-overlay .lg-modal-backdrop{display:none!important}
         }
       `}</style>
     </div>
