@@ -33,9 +33,9 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
         @media(max-width:767px){
           .lg-viewer-shell{height:100%;min-height:0;overflow:hidden}
           .lg-viewer-shell .pv{margin:0!important;width:100%!important;height:100%!important;min-height:0!important}
-          .lg-viewer-shell .pv-canvas{width:100%!important;height:100%!important;min-height:0!important}
-          /* Mobile map starts at 50% of the available viewport. */
-          .lg-viewer-shell .pv-canvas>svg{width:50%!important;height:50%!important;margin:auto!important}
+          .lg-viewer-shell .pv-canvas{width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important}
+          /* Let the SVG use the full mobile canvas. The viewer's own zoom/pan state controls its scale. */
+          .lg-viewer-shell .pv-canvas>svg{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;touch-action:none!important}
           .lg-left-panel{left:8px!important;right:8px!important;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom))!important;width:auto!important;height:58px!important;max-height:58px!important;overflow:hidden!important;border-radius:16px!important;z-index:30!important}
           .lg-left-panel.mobile-open{height:auto!important;max-height:min(72dvh,560px)!important;overflow:auto!important}
           .lg-right-panel{display:none!important}
