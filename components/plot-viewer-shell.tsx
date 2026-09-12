@@ -22,7 +22,7 @@ function isStatusColor(value: string) {
     const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
     return (r > 150 && r > g * 1.35 && r > b * 1.35) || (g > 130 && g > r * 1.25 && g > b * 1.15);
   }
-  const rgb = v.match(/^rgba?\\(([^)]+)\\)$/);
+  const rgb = v.match(/^rgba?\(([^)]+)\)$/);
   if (rgb) {
     const [r, g, b] = rgb[1].split(',').slice(0, 3).map(Number);
     return (r > 150 && r > g * 1.35 && r > b * 1.35) || (g > 130 && g > r * 1.25 && g > b * 1.15);
@@ -44,12 +44,11 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
         if (cancelled) return;
         const owners = Array.isArray(data?.owners) ? data.owners : [];
         ownerIndex = new Map(owners.map((owner: any, index: number) => [String(owner.id), index]));
-        const ownerNames = new Map(owners.map((owner: any) => [String(owner.id), String(owner.name || '')]));
         const rawLots = Array.isArray(data?.lots) ? data.lots : Array.isArray(data?.plots) ? data.plots : [];
         lots = rawLots.map((lot: any) => ({
           number: String(lot.number ?? lot.plot_number ?? ''),
           status: String(lot.status ?? lot.plotStatus ?? lot.plot_status ?? lot.saleStatus ?? lot.sale_status ?? '').trim().toLowerCase(),
-          ownerId: lot.ownerId != null ? String(lot.ownerId) : lot.owner_id != null ? String(lot.owner_id) : ownerNames.size ? null : null,
+          ownerId: lot.ownerId != null ? String(lot.ownerId) : lot.owner_id != null ? String(lot.owner_id) : null,
         }));
       })
       .catch(() => {});
@@ -60,19 +59,23 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
       if (!svg) return;
       svg.querySelectorAll<SVGGElement>('g').forEach(group => {
         const texts = Array.from(group.querySelectorAll<SVGTextElement>('text'));
-        const numberNode = texts.find(node => /^\\d+(?:\\.\\d+)?$/.test((node.textContent || '').trim()));
+        const numberNode = texts.find(node => /^\d+(?:\.\d+)?$/.test((node.textContent || '').trim()));
         const number = numberNode?.textContent?.trim() || '';
         const lot = lots.find(item => item.number === number);
         if (!lot) return;
         const status = lot.status === 'sale' ? 'sold' : lot.status;
         if (numberNode) numberNode.style.setProperty('fill', status === 'sold' ? '#dc2626' : '#172033', 'important');
+        group.querySelectorAll<SVGCircleElement>('circle').forEach(circle => {
+          circle.style.setProperty('display', status === 'sold' ? 'none' : '');
+        });
         const polygon = group.querySelector<SVGPolygonElement>('polygon');
         if (polygon) {
           const fill = polygon.style.getPropertyValue('fill') || '';
           if (isStatusColor(fill)) {
             const index = lot.ownerId ? ownerIndex.get(String(lot.ownerId)) ?? 0 : 0;
-            polygon.style.setProperty('fill', OWNER_COLORS[index % OWNER_COLORS.length], 'important');
-            polygon.style.setProperty('filter', `drop-shadow(0 0 5px ${OWNER_COLORS[index % OWNER_COLORS.length]})`, 'important');
+            const color = OWNER_COLORS[index % OWNER_COLORS.length];
+            polygon.style.setProperty('fill', color, 'important');
+            polygon.style.setProperty('filter', `drop-shadow(0 0 5px ${color})`, 'important');
           }
         }
       });
@@ -90,7 +93,7 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
       <style jsx global>{`
         .lg-viewer-shell{position:relative;height:100%;min-height:0;overflow:hidden}
         .lg-viewer-shell .pv{grid-template-columns:minmax(0,1fr)!important;margin-left:280px!important;margin-right:320px!important;width:calc(100% - 600px)!important}
-        .lg-viewer-shell .pv-left,.lg-viewer-shell .pv-right{display:none!important}
+        .lg-viewer-shell .pv-left{display:none!important}.lg-viewer-shell .pv-right{display:block!important}
         .lg-viewer-shell .pv-canvas{position:relative;z-index:0!important;min-width:0;min-height:0;overflow:hidden}
         .lg-left-panel,.lg-right-panel{position:absolute!important;top:0!important;bottom:0!important;z-index:20!important;pointer-events:auto!important;box-sizing:border-box!important}
         .lg-left-panel{left:0!important;width:280px!important}.lg-right-panel{right:0!important;width:320px!important}
