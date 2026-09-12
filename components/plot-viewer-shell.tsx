@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useHeader } from '@/lib/header-context';
+
 import LandGridFilters from './landgrid-filters';
 
 const PlotViewer = dynamic(() => import('./plot-viewer'), {
@@ -34,7 +35,8 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
           .lg-viewer-shell{height:100%;min-height:0;overflow:hidden}
           .lg-viewer-shell .pv{margin:0!important;width:100%!important;height:100%!important;min-height:0!important}
           .lg-viewer-shell .pv-canvas{width:100%!important;height:100%!important;min-height:0!important;overflow:hidden!important}
-          /* Let the SVG use the full mobile canvas. The viewer's own zoom/pan state controls its scale. */
+          /* The PlotViewer has its own legacy mobile filter/summary action bar. LandGridFilters is now the single filter entry point. */
+          .lg-viewer-shell .pv-mobile-actions{display:none!important}
           .lg-viewer-shell .pv-canvas>svg{display:block!important;width:100%!important;height:100%!important;max-width:none!important;max-height:none!important;margin:0!important;touch-action:none!important}
           .lg-left-panel{left:8px!important;right:8px!important;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom))!important;width:auto!important;height:58px!important;max-height:58px!important;overflow:hidden!important;border-radius:16px!important;z-index:30!important}
           .lg-left-panel.mobile-open{height:auto!important;max-height:min(72dvh,560px)!important;overflow:auto!important}
