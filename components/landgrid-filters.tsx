@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-react';
 
 type Owner = { id: string; name: string; color?: string | null };
 type Lot = { id: string; number: string; ownerId?: string | null; ownerName?: string; area?: number | null };
@@ -28,6 +28,7 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
   const [selectedOwners, setSelectedOwners] = useState<Set<string>>(() => new Set());
   const [mobileOpen, setMobileOpen] = useState(false);
   const [ownerOpen, setOwnerOpen] = useState(true);
+  const [ownerSearch, setOwnerSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -39,11 +40,7 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
       .then(data => {
         if (cancelled) return;
         const rawOwners = Array.isArray(data?.owners) ? data.owners : Array.isArray(data?.project_owners) ? data.project_owners : [];
-        const parsedOwners: Owner[] = rawOwners.map((owner: any) => ({
-          id: String(owner.id),
-          name: String(owner.name || 'Unnamed owner'),
-          color: owner.color || null,
-        }));
+        const parsedOwners: Owner[] = rawOwners.map((owner: any) => ({ id: String(owner.id), name: String(owner.name || 'Unnamed owner'), color: owner.color || null }));
         const ownerNames = new Map(parsedOwners.map(owner => [owner.id, owner.name]));
         const rawLots = Array.isArray(data?.lots) ? data.lots : Array.isArray(data?.plots) ? data.plots : [];
         const parsedLots: Lot[] = rawLots.map((lot: any) => {
@@ -63,55 +60,54 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
       })
       .catch(error => {
         console.error('[LandGrid] Failed to load plan', error);
-        if (!cancelled) {
-          setOwners([]);
-          setLots([]);
-        }
+        if (!cancelled) { setOwners([]); setLots([]); }
       });
     return () => { cancelled = true; };
   }, [projectSlug]);
 
   const ownerMap = useMemo(() => new Map(owners.map(owner => [owner.id, owner])), [owners]);
   const ownerIndex = useMemo(() => new Map(owners.map((owner, index) => [owner.id, index])), [owners]);
-  const selectedLots = useMemo(
-    () => lots.filter(lot => lot.ownerId != null && selectedOwners.has(String(lot.ownerId))),
-    [lots, selectedOwners],
-  );
-  const selectedYards = useMemo(
-    () => selectedLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0),
-    [selectedLots],
-  );
+  const filteredOwners = useMemo(() => {
+    const query = norm(ownerSearch);
+    return query ? owners.filter(owner => norm(owner.name).includes(query)) : owners;
+  }, [owners, ownerSearch]);
+  const selectedLots = useMemo(() => lots.filter(lot => lot.ownerId != null && selectedOwners.has(String(lot.ownerId))), [lots, selectedOwners]);
+  const selectedYards = useMemo(() => selectedLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0), [selectedLots]);
 
   const toggleOwner = (ownerId: string) => {
     setSelectedOwners(previous => {
       const next = new Set(previous);
-      if (next.has(ownerId)) next.delete(ownerId);
-      else next.add(ownerId);
+      if (next.has(ownerId)) next.delete(ownerId); else next.add(ownerId);
       return next;
     });
   };
-
   const clearOwners = () => setSelectedOwners(new Set());
+  const selectAllVisible = () => setSelectedOwners(previous => {
+    const next = new Set(previous);
+    filteredOwners.forEach(owner => next.add(owner.id));
+    return next;
+  });
+  const removeOwner = (ownerId: string) => setSelectedOwners(previous => {
+    const next = new Set(previous);
+    next.delete(ownerId);
+    return next;
+  });
 
   useEffect(() => {
     let cancelled = false;
     let frame = 0;
-
     const apply = () => {
       if (cancelled) return;
       const svg = getMapSvg();
       if (!svg) return;
-
       svg.querySelectorAll<SVGGElement>('g').forEach(group => {
         const number = getPlotNumber(group);
         const lot = lots.find(item => item.number === number);
         const polygon = group.querySelector<SVGPolygonElement>('polygon');
         if (!lot || !polygon) return;
-
         const ownerId = lot.ownerId == null ? '' : String(lot.ownerId);
         const owner = ownerMap.get(ownerId);
         const active = ownerId !== '' && selectedOwners.has(ownerId);
-
         if (active) {
           const color = owner ? colorFor(owner, ownerIndex.get(owner.id) ?? 0) : '#2563eb';
           polygon.style.setProperty('fill', color, 'important');
@@ -128,162 +124,151 @@ export default function LandGridFilters({ projectSlug }: { projectSlug: string }
         }
       });
     };
-
-    const run = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(apply);
-    };
-
+    const run = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(apply); };
     let attempts = 0;
-    const retry = () => {
-      if (cancelled || attempts++ >= 15) return;
-      run();
-      window.setTimeout(retry, 100);
-    };
+    const retry = () => { if (cancelled || attempts++ >= 15) return; run(); window.setTimeout(retry, 100); };
     retry();
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(frame);
-    };
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
   }, [lots, selectedOwners, ownerMap, ownerIndex]);
-
-  const summary = (
-    <section className="lg-summary">
-      <div className="lg-summary-head">
-        <div>
-          <strong>Summary</strong>
-          <span>{selectedOwners.size ? `${selectedLots.length} plots · ${selectedYards.toLocaleString(undefined, { maximumFractionDigits: 2 })} sq.yd` : 'Select owners to see their plots'}</span>
-        </div>
-        {selectedOwners.size > 0 && <button type="button" onClick={clearOwners}>Clear</button>}
-      </div>
-
-      {selectedOwners.size > 0 && (
-        <div className="lg-summary-owners">
-          {owners.filter(owner => selectedOwners.has(owner.id)).map(owner => {
-            const ownerLots = lots.filter(lot => lot.ownerId === owner.id);
-            const yards = ownerLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0);
-            const index = ownerIndex.get(owner.id) ?? 0;
-            return (
-              <div className="lg-owner-summary" key={owner.id}>
-                <div className="lg-owner-summary-title">
-                  <span className="lg-dot" style={{ background: colorFor(owner, index) }} />
-                  <strong>{owner.name}</strong>
-                  <span>{ownerLots.length} plots · {yards.toLocaleString(undefined, { maximumFractionDigits: 2 })} sq.yd</span>
-                </div>
-                <div className="lg-owner-plots">
-                  {ownerLots.map(lot => <span key={lot.id}>Plot {lot.number}{lot.area != null ? ` · ${lot.area.toLocaleString()} yd²` : ''}</span>)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
 
   return (
     <div className="lg-shell-overlay">
-      <aside className={`lg-left-panel ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Owner filters and summary">
-        <button
-          type="button"
-          className="lg-mobile-toggle"
-          onClick={() => setMobileOpen(value => !value)}
-          aria-expanded={mobileOpen}
-          aria-label={mobileOpen ? 'Collapse filters' : 'Open filters'}
-        >
+      <aside className={`lg-left-panel ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Map filters">
+        <button type="button" className="lg-mobile-toggle" onClick={() => setMobileOpen(value => !value)} aria-expanded={mobileOpen}>
           <span className="lg-mobile-handle" />
-          <strong>Filters &amp; Summary</strong>
-          <span>{mobileOpen ? '⌄' : '⌃'}</span>
+          <SlidersHorizontal size={16} />
+          <strong>Filters</strong>
+          {selectedOwners.size > 0 && <span className="lg-mobile-count">{selectedOwners.size}</span>}
+          <span className="lg-mobile-chevron">{mobileOpen ? '⌄' : '⌃'}</span>
         </button>
 
         <div className="lg-title">
-          <strong>Filters &amp; Summary</strong>
-          <span>Filter the map by owner and review the selected plots.</span>
+          <div className="lg-title-row">
+            <div><strong>Map Filters</strong><span>Choose owners to highlight their plots.</span></div>
+            {selectedOwners.size > 0 && <button type="button" className="lg-clear-top" onClick={clearOwners}>Clear all</button>}
+          </div>
         </div>
 
         <section className="lg-section">
           <button type="button" className="lg-heading" onClick={() => setOwnerOpen(value => !value)}>
-            <span className="lg-heading-left">
-              {ownerOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              <b>Filter by Owner</b>
-            </span>
-            {selectedOwners.size > 0 && <span className="lg-count">{selectedOwners.size}</span>}
+            <span className="lg-heading-left">{ownerOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}<b>Owners</b></span>
+            <span className="lg-heading-meta">{selectedOwners.size ? `${selectedOwners.size} selected` : `${owners.length} available`}</span>
           </button>
 
-          {ownerOpen && (
-            <div className="lg-body">
-              <div className="lg-owner-actions">
-                <span>{selectedOwners.size ? `${selectedLots.length} plots selected` : 'Select one or more owners'}</span>
+          {ownerOpen && <div className="lg-body">
+            <div className="lg-search-wrap">
+              <Search size={14} />
+              <input value={ownerSearch} onChange={event => setOwnerSearch(event.target.value)} placeholder="Search owners" aria-label="Search owners" />
+              {ownerSearch && <button type="button" aria-label="Clear owner search" onClick={() => setOwnerSearch('')}><X size={14} /></button>}
+            </div>
+
+            <div className="lg-owner-actions">
+              <span>{selectedOwners.size ? `${selectedLots.length} plots highlighted` : 'Select one or more owners'}</span>
+              <div>
+                {filteredOwners.length > 0 && <button type="button" onClick={selectAllVisible}>Select all</button>}
                 {selectedOwners.size > 0 && <button type="button" onClick={clearOwners}>Clear</button>}
               </div>
-
-              {owners.map((owner, index) => {
-                const active = selectedOwners.has(owner.id);
-                return (
-                  <button
-                    key={owner.id}
-                    type="button"
-                    className={`lg-row lg-owner ${active ? 'active' : ''}`}
-                    aria-pressed={active}
-                    onClick={() => toggleOwner(owner.id)}
-                  >
-                    <span className="lg-dot" style={{ background: colorFor(owner, index) }} />
-                    <span>{owner.name}</span>
-                    <span className="lg-check" aria-hidden="true">{active ? <Check size={12} /> : null}</span>
-                  </button>
-                );
-              })}
-
-              {owners.length === 0 && <div className="lg-empty">No plot owners assigned.</div>}
             </div>
-          )}
+
+            {selectedOwners.size > 0 && <div className="lg-chips" aria-label="Selected owners">
+              {owners.filter(owner => selectedOwners.has(owner.id)).map(owner => <button key={owner.id} type="button" className="lg-chip" onClick={() => removeOwner(owner.id)}><span className="lg-dot" style={{ background: colorFor(owner, ownerIndex.get(owner.id) ?? 0) }} />{owner.name}<X size={11} /></button>)}
+            </div>}
+
+            <div className="lg-owner-list">
+              {filteredOwners.map((owner, index) => {
+                const active = selectedOwners.has(owner.id);
+                const ownerLots = lots.filter(lot => lot.ownerId === owner.id);
+                const yards = ownerLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0);
+                return <button key={owner.id} type="button" className={`lg-row ${active ? 'active' : ''}`} aria-pressed={active} onClick={() => toggleOwner(owner.id)}>
+                  <span className="lg-dot" style={{ background: colorFor(owner, ownerIndex.get(owner.id) ?? index) }} />
+                  <span className="lg-owner-name"><b>{owner.name}</b><small>{ownerLots.length} plots · {yards.toLocaleString(undefined, { maximumFractionDigits: 0 })} yd²</small></span>
+                  <span className="lg-check" aria-hidden="true">{active ? <Check size={12} /> : null}</span>
+                </button>;
+              })}
+              {filteredOwners.length === 0 && <div className="lg-empty">No owners match “{ownerSearch}”.</div>}
+            </div>
+          </div>}
         </section>
 
-        {summary}
+        <section className="lg-summary">
+          <div className="lg-summary-head">
+            <div><strong>Selection</strong><span>{selectedOwners.size ? 'Showing highlighted owners on the map' : 'Nothing selected yet'}</span></div>
+          </div>
+          <div className="lg-stat-grid">
+            <div><b>{selectedOwners.size}</b><span>Owners</span></div>
+            <div><b>{selectedLots.length}</b><span>Plots</span></div>
+            <div><b>{selectedYards.toLocaleString(undefined, { maximumFractionDigits: 0 })}</b><span>Sq. yd</span></div>
+          </div>
+          {selectedOwners.size > 0 && <div className="lg-selected-list">
+            {owners.filter(owner => selectedOwners.has(owner.id)).map(owner => {
+              const ownerLots = lots.filter(lot => lot.ownerId === owner.id);
+              const yards = ownerLots.reduce((sum, lot) => sum + (Number.isFinite(Number(lot.area)) ? Number(lot.area) : 0), 0);
+              return <div className="lg-selected-row" key={owner.id}><span className="lg-dot" style={{ background: colorFor(owner, ownerIndex.get(owner.id) ?? 0) }} /><b>{owner.name}</b><span>{ownerLots.length} plots · {yards.toLocaleString(undefined, { maximumFractionDigits: 0 })} yd²</span></div>;
+            })}
+          </div>}
+        </section>
       </aside>
 
       <style>{`
         .lg-shell-overlay{position:absolute;inset:0;z-index:1000;pointer-events:none}
-        .lg-left-panel{position:absolute;left:0;top:0;bottom:0;width:280px;pointer-events:auto;background:#fff;border:1px solid #dbe3ee;box-shadow:0 8px 28px rgba(15,23,42,.16);overflow:auto;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#172033}
+        .lg-left-panel{position:absolute;left:12px;top:12px;bottom:12px;width:310px;pointer-events:auto;background:rgba(255,255,255,.98);border:1px solid #dbe3ee;border-radius:14px;box-shadow:0 10px 35px rgba(15,23,42,.18);overflow:auto;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#172033}
         .lg-left-panel *{box-sizing:border-box}
-        .lg-title{padding:14px 15px;border-bottom:1px solid #e2e8f0}
-        .lg-title strong{display:block;font-size:14px;font-weight:900}
+        .lg-title{padding:15px;border-bottom:1px solid #e2e8f0}
+        .lg-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+        .lg-title strong{display:block;font-size:15px;font-weight:900;letter-spacing:-.01em}
         .lg-title span{display:block;margin-top:3px;font-size:10px;color:#64748b;line-height:1.45}
+        .lg-clear-top{border:0;background:#f1f5f9;color:#334155;border-radius:7px;padding:6px 8px;font-size:10px;font-weight:800;cursor:pointer;white-space:nowrap}
         .lg-section,.lg-summary{border-bottom:1px solid #e2e8f0}
         .lg-heading{width:100%;padding:12px 14px;border:0;background:#fff;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#172033;text-align:left}
-        .lg-heading-left{display:flex;align-items:center;gap:5px}
-        .lg-count{min-width:20px;padding:2px 6px;border-radius:99px;background:#172554;color:#fff;text-align:center;font-size:10px;font-weight:800}
-        .lg-body{padding:0 10px 10px}
-        .lg-owner-actions{display:flex;justify-content:space-between;align-items:center;padding:2px 3px 6px;color:#64748b;font-size:10px}
-        .lg-owner-actions button,.lg-summary-head button{border:0;background:none;color:#334155;font-size:10px;font-weight:800;cursor:pointer}
-        .lg-row{width:100%;border:0;background:#fff;display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:8px;cursor:pointer;text-align:left;color:#172033;font-size:12px}
+        .lg-heading-left{display:flex;align-items:center;gap:6px}
+        .lg-heading-meta{font-size:10px;color:#64748b;font-weight:700}
+        .lg-body{padding:0 11px 11px}
+        .lg-search-wrap{height:36px;display:flex;align-items:center;gap:7px;padding:0 9px;border:1px solid #cbd5e1;border-radius:9px;background:#fff;color:#64748b}
+        .lg-search-wrap:focus-within{border-color:#64748b;box-shadow:0 0 0 3px rgba(100,116,139,.12)}
+        .lg-search-wrap input{min-width:0;flex:1;border:0;outline:0;background:transparent;font-size:11px;color:#172033}
+        .lg-search-wrap button{display:grid;place-items:center;border:0;background:none;color:#64748b;cursor:pointer;padding:2px}
+        .lg-owner-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 2px 6px;color:#64748b;font-size:10px}
+        .lg-owner-actions>div{display:flex;gap:9px}
+        .lg-owner-actions button{border:0;background:none;color:#334155;font-size:10px;font-weight:800;cursor:pointer;padding:0}
+        .lg-owner-actions button:hover,.lg-clear-top:hover{color:#0f172a}
+        .lg-chips{display:flex;gap:5px;flex-wrap:wrap;padding:0 0 8px}
+        .lg-chip{display:flex;align-items:center;gap:5px;border:1px solid #c7d2fe;background:#eef2ff;color:#312e81;border-radius:99px;padding:4px 7px;font-size:9px;font-weight:800;cursor:pointer}
+        .lg-owner-list{display:grid;gap:2px}
+        .lg-row{width:100%;border:0;background:#fff;display:flex;align-items:center;gap:8px;padding:8px;border-radius:9px;cursor:pointer;text-align:left;color:#172033;font-size:11px}
         .lg-row:hover{background:#f8fafc}
-        .lg-row.active{background:#eef2ff;font-weight:800}
-        .lg-check{margin-left:auto;width:18px;height:18px;display:grid;place-items:center;border-radius:5px;background:#e2e8f0;color:#172554}
+        .lg-row.active{background:#eef2ff;box-shadow:inset 3px 0 0 #4f46e5}
+        .lg-owner-name{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+        .lg-owner-name b{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .lg-owner-name small{font-size:9px;color:#64748b}
+        .lg-check{width:19px;height:19px;display:grid;place-items:center;border-radius:6px;background:#e2e8f0;color:#172554;flex:0 0 19px}
         .lg-row.active .lg-check{background:#172554;color:#fff}
         .lg-dot{width:9px;height:9px;min-width:9px;border-radius:50%;display:inline-block}
-        .lg-summary{padding:12px}
-        .lg-summary-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+        .lg-summary{padding:12px;border-bottom:0}
         .lg-summary-head strong{display:block;font-size:13px;font-weight:900}
-        .lg-summary-head span{display:block;margin-top:3px;color:#64748b;font-size:10px;line-height:1.4}
-        .lg-summary-owners{margin-top:10px;display:grid;gap:8px}
-        .lg-owner-summary{padding:9px;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc}
-        .lg-owner-summary-title{display:flex;align-items:center;gap:6px;font-size:11px;flex-wrap:wrap}
-        .lg-owner-summary-title>span:last-child{width:100%;margin-left:15px;color:#64748b;font-size:10px}
-        .lg-owner-plots{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
-        .lg-owner-plots span{padding:3px 5px;border-radius:5px;background:#fff;border:1px solid #e2e8f0;color:#475569;font-size:9px}
-        .lg-empty{padding:12px 5px;color:#64748b;font-size:11px}
+        .lg-summary-head span{display:block;margin-top:2px;color:#64748b;font-size:10px}
+        .lg-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+        .lg-stat-grid>div{padding:9px 6px;text-align:center;border:1px solid #e2e8f0;border-radius:9px;background:#f8fafc}
+        .lg-stat-grid b{display:block;font-size:15px;line-height:1.1;font-weight:900}
+        .lg-stat-grid span{display:block;margin-top:3px;color:#64748b;font-size:8px;text-transform:uppercase;letter-spacing:.04em}
+        .lg-selected-list{display:grid;gap:5px;margin-top:9px}
+        .lg-selected-row{display:grid;grid-template-columns:9px minmax(0,1fr) auto;align-items:center;gap:6px;padding:5px 2px;font-size:9px}
+        .lg-selected-row b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .lg-selected-row>span:last-child{color:#64748b;white-space:nowrap}
+        .lg-empty{padding:14px 5px;color:#64748b;font-size:10px;text-align:center;background:#f8fafc;border-radius:8px}
         .lg-mobile-toggle{display:none}
-        @media(max-width:1100px) and (min-width:768px){.lg-left-panel{width:250px}}
+        @media(max-width:1100px) and (min-width:768px){.lg-left-panel{width:270px}}
         @media(max-width:767px){
           .lg-left-panel{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));top:auto;width:auto;height:58px;max-height:58px;overflow:hidden;border-radius:16px;z-index:30}
           .lg-left-panel.mobile-open{height:auto;max-height:min(72dvh,560px);overflow:auto}
-          .lg-mobile-toggle{width:100%;height:58px;padding:0 14px;border:0;background:#fff;display:flex;align-items:center;gap:10px;color:#172033;text-align:left;cursor:pointer}
-          .lg-mobile-toggle>strong{font-size:13px;flex:1}
-          .lg-mobile-handle{width:28px;height:4px;border-radius:99px;background:#cbd5e1}
+          .lg-mobile-toggle{width:100%;height:58px;padding:0 14px;border:0;background:#fff;display:flex;align-items:center;gap:9px;color:#172033;text-align:left;cursor:pointer}
+          .lg-mobile-toggle>strong{font-size:13px;flex:0 0 auto}
+          .lg-mobile-handle{width:24px;height:4px;border-radius:99px;background:#cbd5e1;position:absolute;left:50%;top:7px;transform:translateX(-50%)}
+          .lg-mobile-count{min-width:20px;padding:3px 6px;border-radius:99px;background:#172554;color:#fff;text-align:center;font-size:9px;font-weight:900}
+          .lg-mobile-chevron{margin-left:auto;font-size:16px;color:#64748b}
           .lg-title{display:none}
           .lg-section,.lg-summary{display:block}
+          .lg-heading{padding-top:11px}
+          .lg-body{padding-bottom:12px}
         }
       `}</style>
     </div>
