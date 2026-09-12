@@ -152,10 +152,6 @@ export default function PlotViewer({ projectSlug }: { projectSlug: string }) {
           {planLots.map(lot => { const q=normalize(parse(lot.points)); const isSel=selected===lot.id; const isFilt=!filteredSet.has(lot.id)&&(filterStatus!=="all"||filterSearch.trim()); const col=sc(lot.status); const c=center(q); const fillColor=isSel?"rgba(255,215,0,.22)":isFilt?"rgba(255,255,255,.06)":"rgba(255,255,255,.18)"; return <g key={lot.id} onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();focusLot(lot)}} style={{cursor:"pointer"}} opacity={isFilt?.35:1}><polygon points={stringify(q)} fill={fillColor} stroke={isSel?"rgba(218,165,32,.85)":"transparent"} strokeWidth={isSel?3/zoom:0} />{isSel&&<polygon points={stringify(q)} fill="none" stroke="rgba(255,200,0,.35)" strokeWidth={6/zoom}/>} {!isFilt&&!isSel&&<circle cx={c.x} cy={c.y} r={Math.max(4,Math.min(10,60/zoom))} fill={col.dot} opacity={.85}/>} {isSel&&<circle cx={c.x} cy={c.y} r={Math.max(4,Math.min(10,60/zoom))*1.3} fill="rgba(255,215,0,.9)" stroke="rgba(218,165,32,1)" strokeWidth={1.5/zoom}/>} {renderAnnotations(q,lot,zoom,isSel)}</g> })}
         </svg>
         {!assetUrl("map")&&!assetUrl("drone")&&<div style={{position:"absolute",inset:0,display:"grid",placeItems:"center",color:"#64748b",pointerEvents:"none"}}>No site plan image yet.</div>}
-        <div className="pv-mobile-actions">
-          <button className={`pv-mobile-action${filterStatus !== "all" || filterSearch ? " active" : ""}`} onClick={() => setSheet(s => s === "none" ? "filter" as any : "none")}>☰ Filters</button>
-          <button className={`pv-mobile-action${ownerSummary.length ? "" : ""}`} onClick={() => setSheet(s => s === "none" ? "summary" as any : "none")}>▤ Summary</button>
-        </div>
       </main>
       <aside className="pv-right">{detailContent}</aside>
     </div>
