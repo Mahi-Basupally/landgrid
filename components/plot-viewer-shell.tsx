@@ -59,7 +59,7 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
       if (!svg) return;
       svg.querySelectorAll<SVGGElement>('g').forEach(group => {
         const texts = Array.from(group.querySelectorAll<SVGTextElement>('text'));
-        const numberNode = texts.find(node => /^\d+(?:\.\d+)?$/.test((node.textContent || '').trim()));
+        const numberNode = texts.find(node => /^\\d+(?:\\.\\d+)?$/.test((node.textContent || '').trim()));
         const number = numberNode?.textContent?.trim() || '';
         const lot = lots.find(item => item.number === number);
         if (!lot) return;
@@ -120,6 +120,8 @@ export default function PlotViewerShell({ projectSlug, projectName, isLoggedIn =
           .lg-right-panel{display:none!important}
           .lg-viewer-shell .pv-right{display:none!important}
           .lg-viewer-shell:has(.pv-sheet.open) .lg-shell-overlay .lg-modal-backdrop{display:none!important}
+          /* The legacy Owner Summary header must not appear in the mobile plot-detail sheet. */
+          .lg-viewer-shell .pv-sheet [style*="font-weight: 900"][style*="border-bottom"]{display:none!important}
         }
       `}</style>
     </div>
