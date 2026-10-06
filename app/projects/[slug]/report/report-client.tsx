@@ -50,7 +50,7 @@ export default function ReportClient({ slug, projectName }: { slug: string; proj
       }
     }
     for (const p of report.unassigned) {
-      rows.push(['Unassigned', '', '', p.number, p.status, String(p.areaSqYd || ''), String(p.areaSqFt || ''), '', '', String(p.price || ''), p.notes || '']);
+      rows.push(['Unassigned', '', '', p.number, p.status, String(p.areaSqYd || ''), String(p.areaSqFt || ''), '', '', String(p.price || ''), '', p.notes || '']);
     }
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
