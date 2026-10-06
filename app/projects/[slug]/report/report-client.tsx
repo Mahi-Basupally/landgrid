@@ -140,25 +140,30 @@ export default function ReportClient({ slug, projectName }: { slug: string; proj
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                       <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 17, fontWeight: 900, color: '#172554' }}>{owner.totalPlots}</div>
-                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>total plots</div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 15, fontWeight: 900, color: '#16a34a' }}>{owner.availablePlots}</div>
-                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>available</div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>{owner.soldPlots}</div>
-                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>sold</div>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 15, fontWeight: 900 }}>{owner.availableAreaSqYd.toLocaleString()} yd²</div>
-                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>yards available</div>
+                          <div style={{ fontSize: 17, fontWeight: 900, color: '#172554' }}>{owner.totalAreaSqYd.toLocaleString()} yd²</div>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>total yards</div>
                         </div>
                       </div>
                       <span style={{ color: '#94a3b8', fontSize: 18, userSelect: 'none' }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
                   </div>
+
+                  {isOpen && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginTop: 14, borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+                      <div style={{ padding: '10px 12px', background: '#f8fafc', borderRadius: 8 }}>
+                        <div style={{ fontSize: 17, fontWeight: 900, color: '#172554' }}>{owner.totalPlots}</div>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>total plots</div>
+                      </div>
+                      <div style={{ padding: '10px 12px', background: '#f0fdf4', borderRadius: 8 }}>
+                        <div style={{ fontSize: 17, fontWeight: 900, color: '#16a34a' }}>{owner.availablePlots}</div>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>available plots · {owner.availableAreaSqYd.toLocaleString()} yd²</div>
+                      </div>
+                      <div style={{ padding: '10px 12px', background: '#fef2f2', borderRadius: 8 }}>
+                        <div style={{ fontSize: 17, fontWeight: 900, color: '#dc2626' }}>{owner.soldPlots}</div>
+                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>sold plots · {(owner.totalAreaSqYd - owner.availableAreaSqYd).toLocaleString()} yd²</div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Plot table */}
                   {isOpen && (
