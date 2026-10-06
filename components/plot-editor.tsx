@@ -43,7 +43,10 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
   const viewW = W / zoom, viewH = H / zoom, viewBox = `${(W - viewW) / 2 + pan.x} ${(H - viewH) / 2 + pan.y} ${viewW} ${viewH}`;
   const button: React.CSSProperties = { border: "1px solid #dbe2ea", background: "#fff", color: "#243047", borderRadius: 8, padding: "8px 10px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, fontSize: 12, fontWeight: 700, cursor: "pointer" };
   const input: React.CSSProperties = { width: "100%", boxSizing: "border-box", border: "1px solid #dbe2ea", borderRadius: 8, padding: "9px 10px", fontSize: 13, outline: "none", background: "#fff" };
-  const card: React.CSSProperties = { background: "#fff", border: "1px solid #e4e9f0", borderRadius: 12, padding: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" };\n  const ownerColor = (ownerId?: string | null) => owners.find(o => o.id === ownerId)?.color || "#64748b";\n  const ownerIsHighlighted = (ownerId?: string | null) => !!ownerId && selectedOwnerIds.has(ownerId);\n  const toggleOwnerHighlight = (id: string) => setSelectedOwnerIds(v => { const next = new Set(v); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  const card: React.CSSProperties = { background: "#fff", border: "1px solid #e4e9f0", borderRadius: 12, padding: 12, boxShadow: "0 1px 2px rgba(15,23,42,.04)" };
+  const ownerColor = (ownerId?: string | null) => owners.find(o => o.id === ownerId)?.color || "#64748b";
+  const ownerIsHighlighted = (ownerId?: string | null) => !!ownerId && selectedOwnerIds.has(ownerId);
+  const toggleOwnerHighlight = (id: string) => setSelectedOwnerIds(v => { const next = new Set(v); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const point = (e: React.PointerEvent<SVGElement>): Point => { const svg = svgRef.current; if (!svg) return { x: 0, y: 0 }; const r = svg.getBoundingClientRect(), v = svg.viewBox.baseVal; return { x: v.x + ((e.clientX - r.left) / r.width) * v.width, y: v.y + ((e.clientY - r.top) / r.height) * v.height }; };
   const asset = (kind: "map" | "drone") => { const url = kind === "map" ? master?.masterPlanUrl : master?.droneUrl; if (!url) return null; return `/api/projects/${encodeURIComponent(projectSlug)}/assets/file?kind=${kind === "map" ? "master-plan" : "drone"}&planType=master_plan&v=${encodeURIComponent(url)}`; };
@@ -148,7 +151,7 @@ export default function PlotEditor({ projectSlug, onStatusChange }: { projectSlu
     const sorted = [hEdges[0], vEdges[0]].filter(Boolean);
     const fs = 16/z, offset = 28/z;
     return <>
-      <text x={c.x} y={active ? (p.ownerId ? c.y - 38/z : c.y - 18/z) : p.ownerId ? c.y - 10/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={22/z} fontWeight={900} pointerEvents="none" fill={p.status === "sold" ? "#dc2626" : (ownerIsHighlighted(p.ownerId) ? ownerColor(p.ownerId) : "#172033")} paintOrder="stroke" stroke="white" strokeWidth={5/z}>{p.number}</text>{p.ownerId && owners.find(o => o.id === p.ownerId) && <text x={c.x} y={active ? c.y - 12/z : c.y + 14/z} textAnchor="middle" dominantBaseline="middle" fontSize={11/z} fontWeight={700} pointerEvents="none" fill={owners.find(o => o.id === p.ownerId)?.color || "#475569"} paintOrder="stroke" stroke="white" strokeWidth={3/z}>{owners.find(o => o.id === p.ownerId)?.name}</text>}
+      <text x={c.x} y={active ? (p.ownerId ? c.y - 38/z : c.y - 18/z) : p.ownerId ? c.y - 10/z : c.y} textAnchor="middle" dominantBaseline="middle" fontSize={22/z} fontWeight={900} pointerEvents="none" fill={p.status === "sold" ? "#dc2626" : (ownerIsHighlighted(p.ownerId) ? ownerColor(p.ownerId) : "#172033")} paintOrder="stroke" stroke="white" strokeWidth={5/z}>{p.number}</text>
       {showArea && sqYd != null && <text x={c.x} y={c.y + (p.ownerId ? 10 : 16)/z} textAnchor="middle" dominantBaseline="middle" fontSize={14/z} fontWeight={700} pointerEvents="none" fill="#475569" paintOrder="stroke" stroke="white" strokeWidth={3/z}>{sqYd} sq.yd</text>}
       {active && (lm || wm) && sorted.map((e, i) => {
         if (i >= 2) return null;
