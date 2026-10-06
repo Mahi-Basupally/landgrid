@@ -65,7 +65,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ slug: 
     if (body.email !== undefined) patch.email = String(body.email || '').trim() || null;
     if (body.phone !== undefined) patch.phone = String(body.phone || '').trim() || null;
     if (body.notes !== undefined) patch.notes = String(body.notes || '').trim() || null;
-    if (body.color !== undefined) patch.color = /^#[0-9a-f]{6}$/i.test(String(body.color || '')) ? String(body.color).toUpperCase() : null;
+    if (body.color !== undefined) {\n      const color = /^#[0-9a-f]{6}$/i.test(String(body.color || '')) ? String(body.color).toUpperCase() : null;\n      if (color) {\n        const { data: otherOwners, error: colorError } = await supabaseAdmin().from('project_owners').select('id,color').eq('project_id', auth.project.id).neq('id', id);\n        if (colorError) throw colorError;\n        if ((otherOwners || []).some((owner: any) => String(owner.color || '').toUpperCase() === color)) return NextResponse.json({ error: 'That color is already assigned to another owner.' }, { status: 409 });\n      }\n      patch.color = color;\n    }
     if (patch.name !== undefined && !patch.name) return NextResponse.json({ error: 'Owner name is required' }, { status: 400 });
     const { data, error } = await supabaseAdmin().from('project_owners').update(patch).eq('id', id).eq('project_id', auth.project.id).select('id,name,email,phone,notes,color,created_at,updated_at').single();
     if (error) throw error;
