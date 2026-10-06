@@ -44,7 +44,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const owned = plots.filter((p: any) => p.owner_id === owner.id);
     const totalArea = owned.reduce((s: number, p: any) => s + (p.area_sq_yards || 0), 0);
     const totalAreaSqFt = owned.reduce((s: number, p: any) => s + (p.area_sq_ft || 0), 0);
-    const statusCounts = owned.reduce((m: any, p: any) => { m[p.status] = (m[p.status] || 0) + 1; return m; }, {});
+    const statusCounts = owned.reduce((m: any, p: any) => { m[p.status] = (m[p.status] || 0) + 1; return m; }, {});\n    const availableAreaSqYd = owned.filter((p: any) => p.status === 'available').reduce((s: number, p: any) => s + (p.area_sq_yards || 0), 0);
     return {
       id: owner.id,
       name: owner.name,
