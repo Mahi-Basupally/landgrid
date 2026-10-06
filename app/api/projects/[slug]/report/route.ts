@@ -44,13 +44,23 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     const owned = plots.filter((p: any) => p.owner_id === owner.id);
     const totalArea = owned.reduce((s: number, p: any) => s + (p.area_sq_yards || 0), 0);
     const totalAreaSqFt = owned.reduce((s: number, p: any) => s + (p.area_sq_ft || 0), 0);
-    const statusCounts = owned.reduce((m: any, p: any) => { m[p.status] = (m[p.status] || 0) + 1; return m; }, {});\n    const availableAreaSqYd = owned.filter((p: any) => p.status === 'available').reduce((s: number, p: any) => s + (p.area_sq_yards || 0), 0);
+    const statusCounts = owned.reduce((m: any, p: any) => {
+      m[p.status] = (m[p.status] || 0) + 1;
+      return m;
+    }, {});
+    const availableAreaSqYd = owned
+      .filter((p: any) => p.status === 'available')
+      .reduce((s: number, p: any) => s + (p.area_sq_yards || 0), 0);
+
     return {
       id: owner.id,
       name: owner.name,
       email: owner.email,
       phone: owner.phone,
       totalPlots: owned.length,
+      availablePlots: statusCounts.available || 0,
+      soldPlots: statusCounts.sold || 0,
+      availableAreaSqYd: Math.round(availableAreaSqYd * 100) / 100,
       totalAreaSqYd: Math.round(totalArea * 100) / 100,
       totalAreaSqFt: Math.round(totalAreaSqFt * 100) / 100,
       statusCounts,
@@ -83,5 +93,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
     unassigned: unassigned.length,
   };
 
-  return NextResponse.json({ project: { name: project.name, address: project.address }, stats, owners: ownerSummaries, unassigned: unassigned.map((p: any) => ({ number: p.plot_number, status: p.status, areaSqYd: p.area_sq_yards, areaSqFt: p.area_sq_ft, price: p.price })) }, { headers: { 'Cache-Control': 'no-store' } });
+  return NextResponse.json({
+    project: { name: project.name, address: project.address },
+    stats,
+    owners: ownerSummaries,
+    unassigned: unassigned.map((p: any) => ({
+      number: p.plot_number,
+      status: p.status,
+      areaSqYd: p.area_sq_yards,
+      areaSqFt: p.area_sq_ft,
+      price: p.price,
+    })),
+  }, { headers: { 'Cache-Control': 'no-store' } });
 }
