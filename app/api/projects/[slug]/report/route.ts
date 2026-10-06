@@ -30,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
   }
 
   const [plotsRes, ownersRes] = await Promise.all([
-    db.from('plots').select('id,plot_number,status,owner_id,area_sq_yards,area_sq_ft,length_m,width_m,price,direction,section').eq('project_id', project.id).order('plot_number'),
+    db.from('plots').select('id,plot_number,status,owner_id,area_sq_yards,area_sq_ft,length_m,width_m,price,direction,section,notes').eq('project_id', project.id).order('plot_number'),
     db.from('project_owners').select('id,name,email,phone').eq('project_id', project.id).order('name'),
   ]);
 
@@ -74,6 +74,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
         price: p.price,
         direction: p.direction,
         section: p.section,
+        notes: p.notes || p.details || '',
       })).sort((a: any, b: any) => Number(a.number) - Number(b.number)),
     };
   }).filter((o: any) => o.totalPlots > 0);
@@ -103,6 +104,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ slug: s
       areaSqYd: p.area_sq_yards,
       areaSqFt: p.area_sq_ft,
       price: p.price,
+      notes: p.notes || p.details || '',
     })),
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
