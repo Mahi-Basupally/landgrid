@@ -4,7 +4,7 @@ import { useHeader } from '@/lib/header-context';
 import Link from 'next/link';
 import { ArrowLeft, Download, TrendingUp, Users, MapPin, CheckCircle } from 'lucide-react';
 
-type PlotRow = { number: string; status: string; areaSqYd: number | null; areaSqFt: number | null; lengthM: number | null; widthM: number | null; price: number | null; direction: string; section: string };
+type PlotRow = { number: string; status: string; areaSqYd: number | null; areaSqFt: number | null; lengthM: number | null; widthM: number | null; price: number | null; direction: string; section: string; notes: string };
 type OwnerSummary = { id: string; name: string; email: string | null; phone: string | null; totalPlots: number; totalAreaSqYd: number; totalAreaSqFt: number; availablePlots: number; soldPlots: number; availableAreaSqYd: number; statusCounts: Record<string, number>; plots: PlotRow[] };
 type Stats = { total: number; available: number; reserved: number; sold: number; hold: number; totalAreaSqYd: number; ownersCount: number; unassigned: number };
 type Report = { project: { name: string; address: string }; stats: Stats; owners: OwnerSummary[]; unassigned: PlotRow[] };
@@ -43,14 +43,14 @@ export default function ReportClient({ slug, projectName }: { slug: string; proj
 
   function exportCSV() {
     if (!report) return;
-    const rows = [['Owner', 'Email', 'Phone', 'Plot', 'Status', 'Area (sq.yd)', 'Area (sq.ft)', 'Length (m)', 'Width (m)', 'Price', 'Direction']];
+    const rows = [['Owner', 'Email', 'Phone', 'Plot', 'Status', 'Area (sq.yd)', 'Area (sq.ft)', 'Length (m)', 'Width (m)', 'Price', 'Direction', 'Notes']];
     for (const o of report.owners) {
       for (const p of o.plots) {
-        rows.push([o.name, o.email || '', o.phone || '', p.number, p.status, String(p.areaSqYd || ''), String(p.areaSqFt || ''), String(p.lengthM || ''), String(p.widthM || ''), String(p.price || ''), p.direction || '']);
+        rows.push([o.name, o.email || '', o.phone || '', p.number, p.status, String(p.areaSqYd || ''), String(p.areaSqFt || ''), String(p.lengthM || ''), String(p.widthM || ''), String(p.price || ''), p.direction || '', p.notes || '']);
       }
     }
     for (const p of report.unassigned) {
-      rows.push(['Unassigned', '', '', p.number, p.status, String(p.areaSqYd || ''), String(p.areaSqFt || ''), '', '', String(p.price || ''), '']);
+      rows.push(['Unassigned', '', '', p.number, p.status, String(p.areaSqYd || ''), String(p.areaSqFt || ''), '', '', String(p.price || ''), p.notes || '']);
     }
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
