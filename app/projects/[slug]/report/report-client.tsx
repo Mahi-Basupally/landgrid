@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, Download, TrendingUp, Users, MapPin, CheckCircle } from 'lucide-react';
 
 type PlotRow = { number: string; status: string; areaSqYd: number | null; areaSqFt: number | null; lengthM: number | null; widthM: number | null; price: number | null; direction: string; section: string };
-type OwnerSummary = { id: string; name: string; email: string | null; phone: string | null; totalPlots: number; totalAreaSqYd: number; totalAreaSqFt: number; statusCounts: Record<string, number>; plots: PlotRow[] };
+type OwnerSummary = { id: string; name: string; email: string | null; phone: string | null; totalPlots: number; totalAreaSqYd: number; totalAreaSqFt: number; availablePlots: number; soldPlots: number; availableAreaSqYd: number; statusCounts: Record<string, number>; plots: PlotRow[] };
 type Stats = { total: number; available: number; reserved: number; sold: number; hold: number; totalAreaSqYd: number; ownersCount: number; unassigned: number };
 type Report = { project: { name: string; address: string }; stats: Stats; owners: OwnerSummary[]; unassigned: PlotRow[] };
 
@@ -137,21 +137,24 @@ export default function ReportClient({ slug, projectName }: { slug: string; proj
                       </div>
                     </div>
                     {/* Summary chips */}
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: '#172554' }}>{owner.totalPlots}</div>
-                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>plots</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 14, fontWeight: 800 }}>{owner.totalAreaSqYd.toLocaleString()}</div>
-                        <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>sq.yd</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {Object.entries(owner.statusCounts).map(([st, cnt]) => (
-                          <span key={st} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 7px', borderRadius: 999, background: STATUS_BG[st] || '#f8fafc', fontSize: 11, fontWeight: 700, color: STATUS_DOT[st] || '#334155' }}>
-                            <Dot status={st} />{cnt}
-                          </span>
-                        ))}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 17, fontWeight: 900, color: '#172554' }}>{owner.totalPlots}</div>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>total plots</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 15, fontWeight: 900, color: '#16a34a' }}>{owner.availablePlots}</div>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>available</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 15, fontWeight: 900, color: '#dc2626' }}>{owner.soldPlots}</div>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>sold</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 15, fontWeight: 900 }}>{owner.availableAreaSqYd.toLocaleString()} yd²</div>
+                          <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>yards available</div>
+                        </div>
                       </div>
                       <span style={{ color: '#94a3b8', fontSize: 18, userSelect: 'none' }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
